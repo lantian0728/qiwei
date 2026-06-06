@@ -7,10 +7,11 @@
       </div>
       <el-menu :default-active="activeMenu" router class="menu"
                background-color="#1f2d3d" text-color="#bfcbd9" active-text-color="#fff">
-        <el-menu-item index="/dashboard"><el-icon><DataLine /></el-icon><span>总览看板</span></el-menu-item>
-        <el-menu-item index="/groups"><el-icon><ChatLineSquare /></el-icon><span>群列表</span></el-menu-item>
-        <el-menu-item index="/alerts"><el-icon><Bell /></el-icon><span>预警管理</span></el-menu-item>
-        <el-menu-item index="/admin"><el-icon><Setting /></el-icon><span>API配置后台</span></el-menu-item>
+        <el-menu-item index="/dashboard"><el-icon><Odometer /></el-icon><span>经营驾驶舱</span></el-menu-item>
+        <el-menu-item index="/staff"><el-icon><Avatar /></el-icon><span>客服效能</span></el-menu-item>
+        <el-menu-item index="/groups"><el-icon><ChatLineSquare /></el-icon><span>群档案</span></el-menu-item>
+        <el-menu-item index="/alerts"><el-icon><Bell /></el-icon><span>风险雷达</span></el-menu-item>
+        <el-menu-item index="/admin"><el-icon><Setting /></el-icon><span>配置</span></el-menu-item>
       </el-menu>
     </el-aside>
 

@@ -36,6 +36,18 @@ export const adminApi = {
   getSyncLogs: (params: any) => request.get('/admin/sync-logs', { params }),
 }
 
+// ========== 客服效能 ==========
+export const staffApi = {
+  overview: (params: any = {}) => request.get('/staff/overview', { params }),
+  ranking: (params: any = {}) => request.get('/staff/ranking', { params }),
+  timeouts: (params: any = {}) => request.get('/staff/timeouts', { params }),
+}
+
+// ========== 驾驶舱 ==========
+export const dashboardApi = {
+  todayActions: () => request.get('/dashboard/today-actions'),
+}
+
 // ========== 预警 ==========
 export const alertApi = {
   list: (params: any) => request.get('/alerts', { params }),

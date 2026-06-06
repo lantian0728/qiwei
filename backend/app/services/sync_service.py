@@ -198,18 +198,17 @@ class MockDataService:
             last_msg_time = None
             for d in range(14):
                 day = (now - timedelta(days=13 - d)).date()
-                msg_count = int(rnd.gauss(activity_base * 40, 6))
-                msg_count = max(0, msg_count)
-                active_members = min(member_count, max(0, int(msg_count / 3)))
-
-                day_msgs = self._gen_day_messages(chat_id, day, msg_count, rnd)
+                questions = max(0, int(rnd.gauss(activity_base * 16, 3)))
+                day_msgs = self._gen_day_messages(chat_id, day, questions, rnd)
+                msg_count = len(day_msgs)
                 if day_msgs:
                     last_msg_time = max(m.send_time for m in day_msgs)
 
+                active_members = min(member_count, len({m.sender_userid for m in day_msgs}))
                 staff_msgs = sum(1 for m in day_msgs if m.sender_type == 1)
                 cust_msgs = sum(1 for m in day_msgs if m.sender_type == 2)
                 reply_rate = min(staff_msgs / cust_msgs, 1.0) if cust_msgs else (1.0 if staff_msgs else 0.0)
-                score = min(msg_count / 50.0, 1.0) * 70 + reply_rate * 30
+                score = min(msg_count / 40.0, 1.0) * 70 + reply_rate * 30
 
                 self.db.add(WxGroupDailyStat(
                     corp_id=self.corp_id, chat_id=chat_id, stat_date=day,
@@ -236,28 +235,54 @@ class MockDataService:
 
         return {"skipped": False, "groups": group_count}
 
-    def _gen_day_messages(self, chat_id: str, day: date, count: int, rnd: random.Random):
+    # 货代场景话术（让客服效能/情绪分析有真实文本可分析）
+    CUSTOMER_QUESTIONS = [
+        "我的货到哪了？", "深圳到洛杉矶现在什么价？", "这周还有舱吗？能不能加塞",
+        "怎么还没派送啊，客户催得急", "被海关查验了怎么办？", "账单是不是多收了？",
+        "别家报价更低，能不能再降点", "截单时间是几点？", "这批走美森还是以星？",
+        "FBA 入仓预约好了吗", "提单什么时候出", "清关需要补什么资料",
+    ]
+    STAFF_REPLIES = [
+        "您好，马上帮您查一下轨迹", "稍等，这边核实后回复您", "今天 18 点前截单哦",
+        "已经在派送途中，预计明天到", "查验是常规抽查，我们盯着，别担心", "账单我让财务复核下",
+        "价格已经是优惠价了，量大可以再谈", "提单今天会出，出了发您",
+    ]
+
+    def _gen_day_messages(self, chat_id: str, day: date, questions: int, rnd: random.Random):
+        """以"客户提问→客服回复"为单位生成真实对话，含合理首响时延与少量超时。"""
         msgs = []
-        senders = self.STAFF + self.CUSTOMERS
-        for _ in range(count):
-            sid, sname = rnd.choice(senders)
-            stype = 1 if sid.startswith("staff") else 2
-            hour = rnd.choices(
-                population=list(range(24)),
-                weights=[1, 1, 1, 1, 1, 1, 2, 4, 8, 10, 10, 9, 7, 8, 10, 10, 9, 7, 6, 5, 4, 3, 2, 1],
-                k=1,
-            )[0]
-            send_time = datetime.combine(day, datetime.min.time()) + timedelta(
-                hours=hour, minutes=rnd.randint(0, 59), seconds=rnd.randint(0, 59)
-            )
+        base = datetime.combine(day, datetime.min.time())
+
+        def add(sid, sname, stype, send_time, content, is_at=False):
             m = WxMessage(
                 corp_id=self.corp_id, chat_id=chat_id,
                 sender_userid=sid, sender_name=sname, sender_type=stype,
-                msg_type="text", content="（演示消息）",
-                is_at=(rnd.random() < 0.1), send_time=send_time,
+                msg_type="text", content=content, is_at=is_at, send_time=send_time,
             )
             self.db.add(m)
             msgs.append(m)
+
+        for _ in range(questions):
+            hour = rnd.choices(
+                population=list(range(24)),
+                weights=[1, 0, 0, 0, 0, 1, 2, 4, 9, 11, 11, 9, 6, 8, 11, 11, 9, 7, 6, 4, 3, 2, 1, 1],
+                k=1,
+            )[0]
+            ctime = base + timedelta(hours=hour, minutes=rnd.randint(0, 59), seconds=rnd.randint(0, 59))
+            cust = rnd.choice(self.CUSTOMERS)
+            add(cust[0], cust[1], 2, ctime, rnd.choice(self.CUSTOMER_QUESTIONS), is_at=(rnd.random() < 0.2))
+
+            # 工作时间内 94% 会被回复；其中约 12% 是超时回复
+            if 9 <= hour < 21 and rnd.random() < 0.94:
+                if rnd.random() < 0.12:
+                    delay = rnd.uniform(32, 75)    # 超时
+                else:
+                    delay = max(1.0, rnd.gauss(9, 5))   # 正常首响 ~9 分钟
+                staff = rnd.choice(self.STAFF)
+                add(staff[0], staff[1], 1, ctime + timedelta(minutes=delay), rnd.choice(self.STAFF_REPLIES))
+                # 偶尔客户追加一句
+                if rnd.random() < 0.3:
+                    add(cust[0], cust[1], 2, ctime + timedelta(minutes=delay + rnd.uniform(1, 8)), "好的，谢谢")
         return msgs
 
     def _gen_alerts(self):

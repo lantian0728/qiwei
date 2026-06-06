@@ -7,8 +7,9 @@ const routes = [
     component: () => import('@/layout/MainLayout.vue'),
     redirect: '/dashboard',
     children: [
-      { path: 'dashboard', name: 'dashboard', component: () => import('@/views/Dashboard.vue'), meta: { title: '总览看板' } },
-      { path: 'groups', name: 'groups', component: () => import('@/views/GroupList.vue'), meta: { title: '群列表' } },
+      { path: 'dashboard', name: 'dashboard', component: () => import('@/views/Dashboard.vue'), meta: { title: '经营驾驶舱' } },
+      { path: 'staff', name: 'staff', component: () => import('@/views/StaffPerformance.vue'), meta: { title: '客服效能' } },
+      { path: 'groups', name: 'groups', component: () => import('@/views/GroupList.vue'), meta: { title: '群档案' } },
       { path: 'groups/:chatId', name: 'group-detail', component: () => import('@/views/GroupDetail.vue'), meta: { title: '群详情' } },
       { path: 'alerts', name: 'alerts', component: () => import('@/views/Alerts.vue'), meta: { title: '预警管理' } },
       { path: 'admin', name: 'admin', component: () => import('@/views/Admin.vue'), meta: { title: 'API配置后台' } },
