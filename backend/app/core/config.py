@@ -1,0 +1,38 @@
+"""
+应用配置：从环境变量 / .env 读取
+"""
+from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # 数据库
+    DATABASE_URL: str = "sqlite:///./wxwork_analytics.db"
+
+    # JWT
+    SECRET_KEY: str = "change-me-to-a-long-random-secret-string"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
+    # 企业微信
+    WX_CORP_ID: str = ""
+
+    # CORS（逗号分隔）
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    # 演示模式
+    DEMO_MODE: bool = True
+
+    # 豆包大模型（火山方舟 Ark，OpenAI 兼容协议）—— 用于消息情绪分析
+    DOUBAO_API_KEY: str = ""
+    DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
+    DOUBAO_MODEL: str = "doubao-pro-32k"  # 填你在方舟创建的推理接入点ID或模型名
+
+    @property
+    def cors_origin_list(self) -> List[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+
+settings = Settings()

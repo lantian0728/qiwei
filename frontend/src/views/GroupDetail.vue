@@ -1,0 +1,187 @@
+<template>
+  <div class="group-detail" v-loading="loading">
+    <el-page-header @back="$router.back()" :content="group.group_name || '群详情'" style="margin-bottom:16px" />
+
+    <el-row :gutter="16">
+      <el-col :span="6">
+        <el-card shadow="never">
+          <template #header><b>群信息</b></template>
+          <el-descriptions :column="1" size="small">
+            <el-descriptions-item label="群类型">{{ group.group_type_name }}</el-descriptions-item>
+            <el-descriptions-item label="群主">{{ group.owner_name }}</el-descriptions-item>
+            <el-descriptions-item label="成员数">{{ group.member_count }}</el-descriptions-item>
+            <el-descriptions-item label="活跃度">
+              <el-tag :color="group.activity_level_color" effect="dark" style="border:none">
+                {{ group.activity_level_name }}（{{ group.activity_score }}）
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="重点群">
+              <el-switch v-model="group.is_key_group" @change="updateFlag" />
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card shadow="never" style="margin-top:16px">
+          <template #header><b>关键指标</b></template>
+          <div class="metric"><span>回复率</span><b>{{ stats.reply_stats?.reply_rate ?? 0 }}%</b></div>
+          <div class="metric"><span>响应率</span><b>{{ stats.response_stats?.response_rate ?? 0 }}%</b></div>
+          <div class="metric"><span>平均响应</span><b>{{ stats.response_time?.avg_response_minutes ?? 0 }}分钟</b></div>
+          <div class="metric"><span>沉默成员</span><b>{{ stats.silent_members_count ?? 0 }}人</b></div>
+        </el-card>
+
+        <el-card shadow="never" style="margin-top:16px">
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>AI 情绪分析</b>
+              <el-button size="small" type="primary" :loading="sentLoading" @click="analyzeSentiment">
+                豆包分析
+              </el-button>
+            </div>
+          </template>
+          <div v-if="!sentiment" class="sent-empty">点击「豆包分析」识别群内客户情绪与风险</div>
+          <div v-else-if="sentiment.available === false" class="sent-empty">
+            {{ sentiment.message }}
+          </div>
+          <div v-else-if="sentiment.analyzed === false" class="sent-empty">
+            {{ sentiment.message }}
+          </div>
+          <div v-else>
+            <div class="metric">
+              <span>情绪倾向</span>
+              <el-tag :type="sentTagType">{{ sentiment.sentiment_name }}（{{ sentiment.score }}分）</el-tag>
+            </div>
+            <div class="metric">
+              <span>风险等级</span>
+              <el-tag :type="riskTagType">{{ riskName }}</el-tag>
+            </div>
+            <div style="margin-top:10px;font-size:13px;color:#606266;line-height:1.6">
+              {{ sentiment.summary }}
+            </div>
+            <div style="margin-top:8px">
+              <el-tag v-for="k in (sentiment.keywords || [])" :key="k" size="small"
+                      style="margin:2px" effect="plain">{{ k }}</el-tag>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="18">
+        <el-card shadow="never">
+          <template #header><b>近 7 日活跃趋势</b></template>
+          <div ref="trendRef" style="height:280px"></div>
+        </el-card>
+
+        <el-row :gutter="16" style="margin-top:16px">
+          <el-col :span="12">
+            <el-card shadow="never">
+              <template #header><b>24小时消息分布</b></template>
+              <div ref="hourRef" style="height:240px"></div>
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card shadow="never">
+              <template #header><b>成员发言排名</b></template>
+              <el-table :data="stats.member_ranking || []" size="small" max-height="240">
+                <el-table-column type="index" label="#" width="50" />
+                <el-table-column prop="name" label="成员" />
+                <el-table-column prop="msg_count" label="发言数" width="90" align="center" />
+              </el-table>
+            </el-card>
+          </el-col>
+        </el-row>
+      </el-col>
+    </el-row>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, nextTick, computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import * as echarts from 'echarts'
+import { groupApi } from '@/api'
+
+const route = useRoute()
+const chatId = route.params.chatId as string
+const group = ref<any>({})
+const stats = ref<any>({})
+const loading = ref(false)
+
+const sentiment = ref<any>(null)
+const sentLoading = ref(false)
+const RISK_NAMES: any = { none: '无', low: '低', medium: '中', high: '高' }
+const riskName = computed(() => RISK_NAMES[sentiment.value?.risk] ?? sentiment.value?.risk ?? '-')
+const sentTagType = computed(() => {
+  const s = sentiment.value?.sentiment
+  return s === 'positive' ? 'success' : s === 'negative' ? 'danger' : 'info'
+})
+const riskTagType = computed(() => {
+  const r = sentiment.value?.risk
+  return r === 'high' ? 'danger' : r === 'medium' ? 'warning' : r === 'low' ? 'info' : 'success'
+})
+
+const analyzeSentiment = async () => {
+  sentLoading.value = true
+  try {
+    sentiment.value = await groupApi.sentiment(chatId, 7)
+  } finally {
+    sentLoading.value = false
+  }
+}
+const trendRef = ref<HTMLElement>()
+const hourRef = ref<HTMLElement>()
+
+const updateFlag = async () => {
+  await groupApi.update(chatId, { is_key_group: group.value.is_key_group })
+  ElMessage.success('已更新')
+}
+
+const renderTrend = () => {
+  if (!trendRef.value) return
+  const chart = echarts.init(trendRef.value)
+  const trend = stats.value.daily_trend || []
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['消息数', '活跃成员', '活跃度评分'] },
+    xAxis: { type: 'category', data: trend.map((t: any) => t.date.slice(5)) },
+    yAxis: [{ type: 'value' }, { type: 'value', max: 100 }],
+    series: [
+      { name: '消息数', type: 'bar', data: trend.map((t: any) => t.total_msgs), itemStyle: { color: '#409EFF' } },
+      { name: '活跃成员', type: 'bar', data: trend.map((t: any) => t.active_members), itemStyle: { color: '#67C23A' } },
+      { name: '活跃度评分', type: 'line', yAxisIndex: 1, data: trend.map((t: any) => t.activity_score), itemStyle: { color: '#E6A23C' } },
+    ],
+  })
+}
+
+const renderHour = () => {
+  if (!hourRef.value) return
+  const chart = echarts.init(hourRef.value)
+  const dist = stats.value.hourly_distribution || []
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: dist.map((d: any) => d.hour + '时') },
+    yAxis: { type: 'value' },
+    series: [{ type: 'bar', data: dist.map((d: any) => d.count), itemStyle: { color: '#409EFF' } }],
+  })
+}
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    group.value = await groupApi.detail(chatId)
+    stats.value = await groupApi.stats(chatId, {})
+    await nextTick()
+    renderTrend()
+    renderHour()
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<style scoped>
+.metric { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.metric span { color: #909399; font-size: 13px; }
+.metric b { color: #303133; }
+.sent-empty { color: #909399; font-size: 13px; text-align: center; padding: 12px 0; }
+</style>
