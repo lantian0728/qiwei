@@ -100,23 +100,41 @@ class CargoWatchService:
         return problems
 
     async def refresh_alerts(self, corp_id: str) -> Dict[str, Any]:
-        """重建货物异常快照：清掉旧的未读货物预警，按当前扫描结果重插。"""
+        """重建货物异常快照：按客户聚合，每个客户一条(汇总各类异常票数)，避免刷屏。"""
+        from collections import Counter
         problems = await self.scan_problems(corp_id)
+
+        by_cust: Dict[str, Dict[str, Any]] = {}
+        for p in problems:
+            key = p["user_number"] or p["username"]
+            g = by_cust.setdefault(key, {
+                "username": p["username"], "chat_id": "", "group_name": "",
+                "level": 2, "issues": Counter(),
+            })
+            g["chat_id"] = g["chat_id"] or p["chat_id"]
+            g["group_name"] = g["group_name"] or p["group_name"]
+            g["level"] = min(g["level"], p["level"])
+            for i in p["issues"]:
+                cat = ("问题件" if "问题件" in i else "滞留" if "滞留" in i
+                       else "退件" if "退件" in i else "超期" if "超" in i
+                       else "久未发货" if "未发货" in i else i)
+                g["issues"][cat] += 1
+
         self.db.query(WxAlert).filter(
             WxAlert.corp_id == corp_id,
             WxAlert.alert_type == CARGO_ALERT_TYPE,
             WxAlert.is_read == False,
         ).delete()
-        for p in problems:
+        for g in by_cust.values():
+            summary = "、".join(f"{n}票{cat}" for cat, n in g["issues"].most_common())
             self.db.add(WxAlert(
                 corp_id=corp_id,
-                chat_id=p["chat_id"],
-                group_name=p["group_name"] or p["username"],
+                chat_id=g["chat_id"],
+                group_name=g["group_name"] or g["username"],
                 alert_type=CARGO_ALERT_TYPE,
-                alert_level=p["level"],
+                alert_level=g["level"],
                 is_read=False,
-                content=f"{p['username']} 单号{p['shipment_id']}"
-                        f"({p['service_name']}→{p['dest']})：{'、'.join(p['issues'])}",
+                content=f"{g['username']}：{summary}",
             ))
         self.db.commit()
-        return {"problems": len(problems)}
+        return {"problems": len(problems), "customers": len(by_cust)}
