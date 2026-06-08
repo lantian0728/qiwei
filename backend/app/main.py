@@ -12,10 +12,38 @@ from app.models import models  # noqa: F401  确保模型被注册
 from app.api import auth, groups, admin, alerts, staff, dashboard, ai, churn, tracking, archive
 
 
+def _auto_migrate():
+    """轻量自动迁移：create_all 只建新表、不给老表补列。
+    这里对比模型与实际表结构，为老表 ALTER ADD 缺失的列（SQLite/MySQL 通用）。"""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    existing = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing:
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have:
+                    continue
+                try:
+                    coltype = col.type.compile(engine.dialect)
+                    conn.execute(text(
+                        f'ALTER TABLE {table.name} ADD COLUMN {col.name} {coltype}'
+                    ))
+                    print(f"[migrate] 已补列 {table.name}.{col.name}")
+                except Exception as e:
+                    print(f"[migrate] 跳过 {table.name}.{col.name}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 建表
+    # 建表 + 自动补列
     Base.metadata.create_all(bind=engine)
+    try:
+        _auto_migrate()
+    except Exception as e:
+        print(f"[migrate] 自动迁移失败: {e}")
 
     # 真实企业：配了 CorpID + Secret 就自动写入企业配置，「快速登录」后即可同步真实群
     if settings.WX_CORP_ID and settings.WX_CORP_SECRET:
