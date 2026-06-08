@@ -39,6 +39,20 @@ def auto_analysis_job():
         db.close()
 
 
+def archive_sync_job():
+    """会话存档增量同步：子进程隔离拉新消息→解密→入库。游标续传，每次只拉新增。"""
+    from app.core import wework_finance
+    if not wework_finance.is_available():
+        return
+    from app.services.chat_archive_service import run_worker
+    try:
+        r = run_worker("sync")
+        if r.get("stored"):
+            print(f"[archive_sync] 入库 {r['stored']} 条，seq={r.get('seq')}")
+    except Exception as e:
+        print(f"[archive_sync] 失败: {e}")
+
+
 def tracking_watch_job():
     """轨迹变化巡检 + 群机器人推送。"""
     from app.services.push_service import run_tracking_push
@@ -60,8 +74,14 @@ def start_scheduler():
                       id="auto_analysis", replace_existing=True)
     scheduler.add_job(tracking_watch_job, "interval", minutes=30,
                       id="tracking_watch", replace_existing=True)
-    # 启动后 1 分钟先跑一次全量分析
-    scheduler.add_job(auto_analysis_job, "date",
+    # 会话存档增量同步：每 10 分钟拉一次新消息
+    scheduler.add_job(archive_sync_job, "interval", minutes=10,
+                      id="archive_sync", replace_existing=True)
+    # 启动后：先同步消息(60s)，再跑全量分析(180s)，保证分析基于最新消息
+    scheduler.add_job(archive_sync_job, "date",
                       run_date=datetime.now() + timedelta(seconds=60),
+                      id="archive_sync_startup", replace_existing=True)
+    scheduler.add_job(auto_analysis_job, "date",
+                      run_date=datetime.now() + timedelta(seconds=180),
                       id="auto_analysis_startup", replace_existing=True)
     scheduler.start()
