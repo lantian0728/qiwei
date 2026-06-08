@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core import doubao
+from app.core.config import settings
 from app.models.models import WxGroup, WxMessage
 
 BATCH = 12  # 每次打包给 AI 的群数
@@ -24,7 +25,7 @@ class GroupClassifyService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _samples(self, corp_id: str, chat_id: str, n: int = 6) -> List[str]:
+    def _samples(self, corp_id: str, chat_id: str, n: int = 15) -> List[str]:
         """取该群最近的客户发言(客户说什么最能区分代理/直客)。"""
         rows = self.db.query(WxMessage.content).filter(
             WxMessage.corp_id == corp_id, WxMessage.chat_id == chat_id,
@@ -45,15 +46,19 @@ class GroupClassifyService:
                    for i, it in enumerate(batch)]
         try:
             text = await doubao.chat([
-                {"role": "system", "content": "你是货代公司运营助手，只返回JSON数组，不要解释。"},
+                {"role": "system", "content": "你是资深货代运营，擅长区分同行(代理)和终端货主(直客)，只返回JSON数组，不要解释。"},
                 {"role": "user", "content":
-                    "判断每个微信群是『代理』还是『直客』。"
-                    "代理(agent)=同行货代/转单方/目的港代理等B端合作方，群里聊订舱、走票、同行报价、"
-                    "『你们能走吗』、配合操作、对方也是物流公司；"
-                    "直客(direct)=终端货主/卖家/工厂，聊『我要发这批货』『我的货到哪了』『帮我寄』。"
-                    f"\n数据：{payload}\n"
+                    "判断每个微信群是『代理』还是『直客』。\n"
+                    "【代理 agent】对方是同行/货代公司/转运方/目的港代理。典型信号：群名含 物流/货代/国际/"
+                    "供应链/转运/freight/logistics；聊 订舱、走票、SO、柜号、提单、开船、清关、"
+                    "『报价给我客户』『你们这边能走吗』『我客户要发』『配合操作下』，是同行之间对接业务。\n"
+                    "【直客 direct】对方是终端货主/卖家/工厂/个人。典型信号：聊 『我要发这批货』『我的货到哪了』"
+                    "『帮我寄』『我是做亚马逊的』『我店铺』，只关心自己这票货。\n"
+                    "判断要点：发言更像『同行帮各自客户对接订舱』→代理；更像『自己有货要发』→直客。"
+                    "群名像物流公司名→偏代理；像店铺/个人/工厂名→偏直客。拿不准给较低 confidence。\n"
+                    f"数据：{payload}\n"
                     '返回数组：[{"i":序号,"kind":"agent或direct","confidence":0到100整数}]'},
-            ], timeout=60)
+            ], timeout=90, model=(settings.DOUBAO_CLASSIFY_MODEL or None))
             arr = doubao.parse_json_array(text)
             return {int(r["i"]): r for r in arr if isinstance(r, dict) and "i" in r}
         except Exception:
@@ -63,8 +68,10 @@ class GroupClassifyService:
         groups = self.db.query(WxGroup).filter(
             WxGroup.corp_id == corp_id, WxGroup.is_monitored == True
         ).all()
+        # 手动确认过(conf=100)的群绝不动；only_unknown 时也跳过已判定的
         targets = [g for g in groups
-                   if not (only_unknown and g.client_kind in ("agent", "direct"))]
+                   if g.client_kind_conf != 100
+                   and not (only_unknown and g.client_kind in ("agent", "direct"))]
 
         # 拆分：有客户发言的走 AI，其余群名规则兜底
         ai_items = []
@@ -97,6 +104,17 @@ class GroupClassifyService:
         out = self.summary(corp_id)
         out["ai_used"] = ai_used
         return out
+
+    def set_kind(self, corp_id: str, chat_id: str, kind: str) -> Dict[str, Any]:
+        """手动设置群的代理/直客并锁定(conf=100，之后 AI 分类不再覆盖)。"""
+        g = self.db.query(WxGroup).filter(
+            WxGroup.corp_id == corp_id, WxGroup.chat_id == chat_id
+        ).first()
+        if g:
+            g.client_kind = kind if kind in ("agent", "direct", "unknown") else "unknown"
+            g.client_kind_conf = 100
+            self.db.commit()
+        return self.summary(corp_id)
 
     def summary(self, corp_id: str) -> Dict[str, Any]:
         rows = self.db.query(WxGroup.client_kind, func.count(WxGroup.id)).filter(

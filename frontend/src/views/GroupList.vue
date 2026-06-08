@@ -36,11 +36,23 @@
       <el-table :data="list" v-loading="loading" style="margin-top:16px" @row-click="goDetail">
         <el-table-column prop="group_name" label="群名称" min-width="200" show-overflow-tooltip />
         <el-table-column prop="group_type_name" label="类型" width="80" />
-        <el-table-column label="客户类型" width="90">
+        <el-table-column label="客户类型" width="110">
           <template #default="{ row }">
-            <el-tag v-if="row.client_kind==='agent'" type="warning" size="small">代理</el-tag>
-            <el-tag v-else-if="row.client_kind==='direct'" type="success" size="small">直客</el-tag>
-            <el-tag v-else type="info" size="small" effect="plain">未判定</el-tag>
+            <span @click.stop>
+              <el-dropdown trigger="click" @command="(k:string)=>setKind(row, k)">
+                <el-tag :type="row.client_kind==='agent'?'warning':row.client_kind==='direct'?'success':'info'"
+                        size="small" :effect="row.client_kind_conf===100?'dark':'light'" style="cursor:pointer">
+                  {{ row.client_kind==='agent'?'代理':row.client_kind==='direct'?'直客':'未判定' }}
+                  {{ row.client_kind_conf===100 ? ' ✓' : '' }}
+                </el-tag>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="agent">代理</el-dropdown-item>
+                    <el-dropdown-item command="direct">直客</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </span>
           </template>
         </el-table-column>
         <el-table-column prop="owner_name" label="群主" width="100" />
@@ -115,6 +127,18 @@ const load = async () => {
 }
 
 const goDetail = (row: any) => router.push(`/groups/${row.chat_id}`)
+
+const setKind = async (row: any, kind: string) => {
+  try {
+    const r: any = await groupApi.setClientKind(row.chat_id, kind)
+    row.client_kind = kind
+    row.client_kind_conf = 100
+    clientStat.value = r
+    ElMessage.success('已设为' + (kind === 'agent' ? '代理' : '直客') + '（已锁定，AI 不再改）')
+  } catch {
+    ElMessage.error('设置失败')
+  }
+}
 
 const classifying = ref(false)
 const clientStat = ref<any>({})

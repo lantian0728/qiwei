@@ -27,6 +27,7 @@ export const groupApi = {
   classifyRun: (only_unknown = false) =>
     request.post('/groups/classify/run', {}, { params: { only_unknown }, timeout: 180000 }),
   classifySummary: () => request.get('/groups/classify/summary'),
+  setClientKind: (chatId: string, kind: string) => request.post(`/groups/${chatId}/client-kind`, { kind }),
 }
 
 // ========== 后台配置 ==========

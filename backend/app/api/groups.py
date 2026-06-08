@@ -164,6 +164,23 @@ async def classify_summary(
     return GroupClassifyService(db).summary(corp_id)
 
 
+class SetClientKindReq(BaseModel):
+    kind: str  # agent / direct / unknown
+
+
+@router.post("/{chat_id}/client-kind", summary="手动设置群代理/直客(锁定,AI不再覆盖)")
+async def set_client_kind(
+    chat_id: str,
+    req: SetClientKindReq,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    corp_id = _require_corp_id(current_user)
+    _get_group_or_404(db, corp_id, chat_id)
+    from app.services.group_classify_service import GroupClassifyService
+    return GroupClassifyService(db).set_kind(corp_id, chat_id, req.kind)
+
+
 # ========== 单群详情 ==========
 
 @router.get("/{chat_id}", summary="获取群详情")

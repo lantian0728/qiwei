@@ -16,11 +16,11 @@ def is_available() -> bool:
 
 
 async def chat(messages: List[Dict[str, str]], temperature: float = 0.3,
-               timeout: int = 30, max_retries: int = 2) -> str:
+               timeout: int = 30, max_retries: int = 2, model: str = None) -> str:
     """调用大模型 chat/completions（OpenAI 兼容），返回文本。
-    免费版限频(429/1302)时自动退避重试。"""
+    model 可覆盖默认模型(如分类用更高级模型)。免费版限频(429/1302)时自动退避重试。"""
     payload = {
-        "model": settings.DOUBAO_MODEL,
+        "model": model or settings.DOUBAO_MODEL,
         "messages": messages,
         "temperature": temperature,
     }

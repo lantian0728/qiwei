@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     DOUBAO_API_KEY: str = ""
     DOUBAO_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
     DOUBAO_MODEL: str = "glm-4.7-flash"
+    DOUBAO_CLASSIFY_MODEL: str = ""  # 代理/直客等需更准的任务用的模型(留空=用 DOUBAO_MODEL)
 
     # 新智慧 NextSLS TMS MPAPI —— 用于查件/运单/客户
     NEXTSLS_TOKEN: str = ""
