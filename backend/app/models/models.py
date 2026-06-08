@@ -215,6 +215,7 @@ class WxGroupDailySummary(Base):
     sentiment_score = Column(Integer, default=50)
     risk = Column(String(16), default="none", comment="none/low/medium/high")
     keywords = Column(String(256), default="", comment="逗号分隔")
+    unresolved = Column(Text, default="", comment="未闭环事项(换行分隔):客户还在等、今天没解决的")
     msg_count = Column(Integer, default=0)
     generated_by = Column(String(16), default="rule", comment="ai/rule")
     generated_at = Column(DateTime, default=datetime.now)

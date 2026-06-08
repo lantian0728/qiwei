@@ -54,12 +54,14 @@ def scan_risk(contents: List[str]) -> Tuple[str, int, List[str]]:
 
 SYSTEM_PROMPT = (
     "你是国际物流货代公司的客户群运营助手。根据某客户群今天的聊天记录，"
-    "用一句话总结今天群里发生了什么、客户关心什么、有无投诉或流失风险。只返回 JSON，不要多余文字。"
+    "总结今天群里发生了什么、客户关心什么、有无投诉或流失风险，"
+    "并特别揪出『客户提了、但今天还没被客服解决/还在等回复』的事(未闭环)。只返回 JSON，不要多余文字。"
 )
 USER_TEMPLATE = (
     "群名：{group}\n今日消息（客户C/客服S）：\n{messages}\n\n"
     '返回 JSON：{{"summary":"一句话(40字内)","sentiment":"positive|neutral|negative",'
-    '"score":0到100整数,"risk":"none|low|medium|high","keywords":["最多5个关键词"]}}'
+    '"score":0到100整数,"risk":"none|low|medium|high","keywords":["最多5个关键词"],'
+    '"unresolved":["客户提了但还没解决/还在等的具体事项,最多3条,都解决了就给空数组"]}}'
 )
 
 
@@ -86,7 +88,7 @@ class AIReportService:
         risk, _w, kws = scan_risk(customer_texts)
         result = {
             "summary": "", "sentiment": "neutral", "score": 50,
-            "risk": risk, "keywords": kws, "generated_by": "rule",
+            "risk": risk, "keywords": kws, "unresolved": [], "generated_by": "rule",
         }
 
         if doubao.is_available() and customer_texts:
@@ -108,6 +110,7 @@ class AIReportService:
                         "score": int(parsed.get("score", 50)),
                         "risk": parsed.get("risk", risk),
                         "keywords": parsed.get("keywords", kws)[:5],
+                        "unresolved": (parsed.get("unresolved") or [])[:3],
                         "generated_by": "ai",
                     })
             except Exception:
@@ -141,6 +144,7 @@ class AIReportService:
         row.sentiment_score = result["score"]
         row.risk = result["risk"]
         row.keywords = ",".join(result["keywords"]) if result["keywords"] else ""
+        row.unresolved = "\n".join(result.get("unresolved") or [])
         row.msg_count = total
         row.generated_by = result["generated_by"]
         row.generated_at = datetime.now()

@@ -55,6 +55,21 @@ async def today_actions(
             "text": a.content,
         })
 
+    # 3) 未闭环：AI 日报揪出的「客户还在等、今天没解决」的事
+    from app.models.models import WxGroupDailySummary
+    for s in db.query(WxGroupDailySummary).filter(
+        WxGroupDailySummary.corp_id == cid,
+        WxGroupDailySummary.summary_date == today,
+        WxGroupDailySummary.unresolved != "",
+    ).all():
+        for item in (s.unresolved or "").split("\n"):
+            if item.strip():
+                actions.append({
+                    "level": "medium", "type": "未闭环",
+                    "group_name": s.group_name, "chat_id": s.chat_id,
+                    "text": f"{s.group_name}：{item.strip()}",
+                })
+
     # 高优先级排前
     order = {"high": 0, "medium": 1, "low": 2}
     actions.sort(key=lambda x: order.get(x["level"], 9))
