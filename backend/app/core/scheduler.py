@@ -57,14 +57,28 @@ def archive_sync_job():
     db = SessionLocal()
     try:
         from app.services.activity_service import ActivityLevelService
-        from app.services.ai_report_service import AIReportService
         from app.services.churn_service import ChurnService
-        ActivityLevelService(db).recompute(corp, today)        # 顶部卡片+活跃度饼图
-        asyncio.run(AIReportService(db).generate_active(corp, today))  # 活跃群AI日报
-        ChurnService(db).generate_alerts(corp)                 # 流失预警
-        print(f"[archive_sync] 入库 {r['stored']} 条并已重算统计/日报")
+        ActivityLevelService(db).recompute(corp, today)        # 统计+活跃度(无AI,可高频)
+        ChurnService(db).generate_alerts(corp)                 # 流失预警(无AI)
+        print(f"[archive_sync] 入库 {r['stored']} 条并已重算统计")
     except Exception as e:
         print(f"[archive_sync] 重算失败: {e}")
+    finally:
+        db.close()
+
+
+def ai_report_job():
+    """AI 日报：逐群过智谱(免费版1QPS)，单独低频跑，避免和高频同步撞限频。"""
+    from app.core import wework_finance
+    if not wework_finance.is_available():
+        return
+    corp = settings.WX_ARCHIVE_CORPID or settings.WX_CORP_ID
+    db = SessionLocal()
+    try:
+        from app.services.ai_report_service import AIReportService
+        asyncio.run(AIReportService(db).generate_active(corp, date.today()))
+    except Exception as e:
+        print(f"[ai_report] 失败: {e}")
     finally:
         db.close()
 
@@ -90,14 +104,17 @@ def start_scheduler():
                       id="auto_analysis", replace_existing=True)
     scheduler.add_job(tracking_watch_job, "interval", minutes=30,
                       id="tracking_watch", replace_existing=True)
-    # 会话存档增量同步：每 10 分钟拉一次新消息
-    scheduler.add_job(archive_sync_job, "interval", minutes=10,
+    # 会话存档同步+统计(无AI)：每 3 分钟，消息/客服效能/活跃度准实时
+    scheduler.add_job(archive_sync_job, "interval", minutes=3,
                       id="archive_sync", replace_existing=True)
-    # 启动后：先同步消息(60s)，再跑全量分析(180s)，保证分析基于最新消息
+    # AI 日报(调智谱1QPS)：每 30 分钟，避免和高频同步撞限频
+    scheduler.add_job(ai_report_job, "interval", minutes=30,
+                      id="ai_report", replace_existing=True)
+    # 启动后：先同步消息(60s)，再跑 AI 日报(200s)
     scheduler.add_job(archive_sync_job, "date",
                       run_date=datetime.now() + timedelta(seconds=60),
                       id="archive_sync_startup", replace_existing=True)
-    scheduler.add_job(auto_analysis_job, "date",
-                      run_date=datetime.now() + timedelta(seconds=180),
-                      id="auto_analysis_startup", replace_existing=True)
+    scheduler.add_job(ai_report_job, "date",
+                      run_date=datetime.now() + timedelta(seconds=200),
+                      id="ai_report_startup", replace_existing=True)
     scheduler.start()
