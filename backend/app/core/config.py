@@ -27,10 +27,11 @@ class Settings(BaseSettings):
     # 演示模式
     DEMO_MODE: bool = True
 
-    # 豆包大模型（火山方舟 Ark，OpenAI 兼容协议）—— 用于消息情绪分析
+    # 大模型（OpenAI 兼容）—— 默认智谱 GLM，用于AI日报/情绪/客户匹配
+    # 变量名沿用 DOUBAO_* 但实际指向所配的服务（现为智谱）
     DOUBAO_API_KEY: str = ""
-    DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
-    DOUBAO_MODEL: str = "doubao-pro-32k"  # 填你在方舟创建的推理接入点ID或模型名
+    DOUBAO_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+    DOUBAO_MODEL: str = "glm-4-flash"
 
     # 新智慧 NextSLS TMS MPAPI —— 用于查件/运单/客户
     NEXTSLS_TOKEN: str = ""

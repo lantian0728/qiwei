@@ -237,10 +237,29 @@ class WxGroupCustomer(Base):
     candidate = Column(String(128), default="", comment="从群名识别出的候选名")
     confidence = Column(Integer, default=0, comment="匹配置信度 0-100")
     match_status = Column(String(16), default="none", comment="none/auto/confirmed")
+    webhook_url = Column(String(512), default="", comment="群机器人webhook(配了才自动推轨迹)")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     __table_args__ = (
         UniqueConstraint("corp_id", "chat_id", name="uq_groupcustomer_corp_chat"),
+    )
+
+
+class WxShipmentStatus(Base):
+    """运单状态快照(用于检测状态变化→触发群推送)"""
+    __tablename__ = "wx_shipment_status"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    corp_id = Column(String(64), index=True, nullable=False)
+    chat_id = Column(String(128), index=True, default="")
+    shipment_id = Column(String(64), nullable=False)
+    client_reference = Column(String(128), default="")
+    status = Column(String(32), default="")
+    last_pushed_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("corp_id", "shipment_id", name="uq_shipstatus_corp_sid"),
     )
 
 

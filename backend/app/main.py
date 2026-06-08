@@ -50,6 +50,14 @@ async def lifespan(app: FastAPI):
                 ChurnService(db).generate_alerts("demo_corp")
         finally:
             db.close()
+
+    # 启动后台调度器：全量AI分析 + 轨迹巡检推送（全自动）
+    try:
+        from app.core.scheduler import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        print(f"[scheduler] 启动失败: {e}")
+
     yield
 
 
