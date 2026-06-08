@@ -118,6 +118,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { trackingApi } from '@/api'
+import { startTask } from '@/utils/loading'
 
 const tab = ref('number')
 const nextslsOk = ref(true)
@@ -155,13 +156,14 @@ const loadMappings = async () => { mappings.value = (await trackingApi.matchList
 
 const runMatch = async () => {
   matching.value = true
+  const task = startTask('🔍 正在匹配群↔客户')
   try {
     const r: any = await trackingApi.matchRun()
     ElMessage.success(`匹配完成：${r.matched}/${r.total_groups} 个群关联到客户（客户库 ${r.directory_size} 人${r.ai_used ? `，智谱精修 ${r.ai_used} 个` : ''}）`)
     await loadMappings()
   } catch (e: any) {
     ElMessage.error('匹配失败：' + (e?.response?.data?.detail || e?.message || '请稍后重试'))
-  } finally { matching.value = false }
+  } finally { matching.value = false; task.close() }
 }
 
 const openShipments = async (row: any) => {

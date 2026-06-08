@@ -82,6 +82,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import { groupApi } from '@/api'
+import { startTask } from '@/utils/loading'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,6 +121,7 @@ const clientStat = ref<any>({})
 const loadStat = async () => { clientStat.value = await groupApi.classifySummary() }
 const runClassify = async () => {
   classifying.value = true
+  const task = startTask('🤖 智谱正在识别代理/直客')
   try {
     const r: any = await groupApi.classifyRun()
     ElMessage.success(`分类完成：代理 ${r.agent} / 直客 ${r.direct} / 未判定 ${r.unknown}（AI 判 ${r.ai_used ?? 0} 个）`)
@@ -129,6 +131,7 @@ const runClassify = async () => {
     ElMessage.error('分类失败：' + (e?.response?.data?.detail || e?.message || '稍后重试'))
   } finally {
     classifying.value = false
+    task.close()
   }
 }
 

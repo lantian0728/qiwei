@@ -154,6 +154,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { groupApi } from '@/api'
+import { startTask } from '@/utils/loading'
 
 const route = useRoute()
 const chatId = route.params.chatId as string
@@ -189,12 +190,14 @@ const analyzeSentiment = async () => {
 
 const loadDigest = async () => {
   digestLoading.value = true
+  const task = startTask('✨ 正在提炼今日群聊重点')
   try {
     digest.value = await groupApi.digest(chatId)
   } catch (e: any) {
     ElMessage.error('提炼失败：' + (e?.response?.data?.detail || e?.message || '稍后重试'))
   } finally {
     digestLoading.value = false
+    task.close()
   }
 }
 

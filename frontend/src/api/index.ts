@@ -46,6 +46,8 @@ export const staffApi = {
   overview: (params: any = {}) => request.get('/staff/overview', { params }),
   ranking: (params: any = {}) => request.get('/staff/ranking', { params }),
   timeouts: (params: any = {}) => request.get('/staff/timeouts', { params }),
+  getStaffNames: () => request.get('/staff/staff-names'),
+  setStaffNames: (names: string[]) => request.post('/staff/staff-names', { names }),
 }
 
 // ========== 驾驶舱 ==========

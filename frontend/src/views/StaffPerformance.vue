@@ -1,5 +1,24 @@
 <template>
   <div class="staff-perf" v-loading="loading">
+    <div class="staff-names-bar">
+      <span>当前客服（{{ staffNames.length }} 人）：</span>
+      <el-tag v-for="n in staffNames" :key="n" size="small" style="margin:0 4px 0 0">{{ n }}</el-tag>
+      <el-button link type="primary" size="small" @click="openNames">设置名单</el-button>
+    </div>
+    <el-dialog v-model="namesDialog" title="设置客服名单" width="460px">
+      <p style="color:#909399;font-size:13px;margin-top:0">
+        填客服的真实姓名（与群里显示一致），系统只统计这些人的发言与首响。输入姓名后回车添加。
+      </p>
+      <el-select v-model="editNames" multiple filterable allow-create default-first-option
+                 placeholder="输入客服姓名，回车添加" style="width:100%">
+        <el-option v-for="n in staffNames" :key="n" :label="n" :value="n" />
+      </el-select>
+      <template #footer>
+        <el-button @click="namesDialog=false">取消</el-button>
+        <el-button type="primary" :loading="savingNames" @click="saveNames">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 概览 -->
     <div class="stat-row">
       <div class="stat-card">
@@ -107,6 +126,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import * as echarts from 'echarts'
 import { staffApi } from '@/api'
@@ -116,6 +136,25 @@ const ov = ref<any>({})
 const ranking = ref<any[]>([])
 const timeouts = ref<any[]>([])
 const barRef = ref<HTMLElement>()
+const namesDialog = ref(false)
+const staffNames = ref<string[]>([])
+const editNames = ref<string[]>([])
+const savingNames = ref(false)
+
+const loadNames = async () => {
+  staffNames.value = ((await staffApi.getStaffNames()) as any).names || []
+}
+const openNames = () => { editNames.value = [...staffNames.value]; namesDialog.value = true }
+const saveNames = async () => {
+  savingNames.value = true
+  try {
+    await staffApi.setStaffNames(editNames.value)
+    ElMessage.success('已保存，重新统计中…')
+    namesDialog.value = false
+    await loadNames()
+    await loadAll()
+  } finally { savingNames.value = false }
+}
 
 const renderBar = () => {
   if (!barRef.value) return
@@ -135,7 +174,7 @@ const renderBar = () => {
   window.addEventListener('resize', () => chart.resize())
 }
 
-onMounted(async () => {
+const loadAll = async () => {
   loading.value = true
   try {
     const [o, r, t] = await Promise.all([
@@ -149,10 +188,15 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(() => { loadAll(); loadNames() })
 </script>
 
 <style scoped>
+.staff-names-bar { background:#fff; border-radius:12px; padding:12px 18px; margin-bottom:16px;
+  box-shadow:0 1px 4px rgba(0,0,0,0.04); font-size:13px; color:#606266;
+  display:flex; align-items:center; flex-wrap:wrap; gap:2px; }
 .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
 .stat-card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 .stat-card.warn .stat-value { color: #F56C6C; }

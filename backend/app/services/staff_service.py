@@ -19,6 +19,10 @@ from app.models.models import WxMessage, WxGroup, WxGroupMember, WxSystemConfig
 # 撤回/表情不计入有效发言（撤回是收回、表情非实质沟通）
 EXCLUDE_SPEAK_TYPES = ("revoke", "emotion")
 
+# 客服名单：默认放已知客服，可在配置里用 staff_names 覆盖（逗号分隔姓名）
+STAFF_NAMES_KEY = "staff_names"
+DEFAULT_STAFF_NAMES = ("陈小娴", "江燕芳", "郑燕芳", "陈桂兰")
+
 DEFAULT_WORK_START = 9
 DEFAULT_WORK_END = 21
 DEFAULT_SLA_MINUTES = 30
@@ -45,10 +49,21 @@ class StaffPerformanceService:
             "sla_minutes": geti("sla_minutes", DEFAULT_SLA_MINUTES),
         }
 
+    def staff_names(self, corp_id: str) -> set:
+        """客服名单（姓名集合）。配置了 staff_names 用配置，否则用默认。"""
+        row = self.db.query(WxSystemConfig).filter(
+            WxSystemConfig.corp_id == corp_id,
+            WxSystemConfig.config_key == STAFF_NAMES_KEY,
+        ).first()
+        if row and row.config_value:
+            return {x.strip() for x in row.config_value.split(",") if x.strip()}
+        return set(DEFAULT_STAFF_NAMES)
+
     # ---------- 核心：把消息流拆成"首响事件" ----------
     def _build_events(self, corp_id: str, start_date: date, end_date: date) -> List[Dict[str, Any]]:
         cfg = self.get_config(corp_id)
         ws, we, sla = cfg["work_start_hour"], cfg["work_end_hour"], cfg["sla_minutes"]
+        staff = self.staff_names(corp_id)  # 只有名单内的人算客服
 
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
@@ -105,7 +120,7 @@ class StaffPerformanceService:
             if m.sender_type == 2:  # 客户
                 if pending is None:
                     pending = m.send_time
-            else:  # 企业成员回复
+            elif m.sender_name in staff:  # 只有客服名单内的人，才算"客服回复"
                 if pending is not None:
                     wait = (m.send_time - pending).total_seconds() / 60.0
                     biz = in_business(pending)
@@ -117,6 +132,7 @@ class StaffPerformanceService:
                         "timeout": biz and wait > sla, "in_business": biz,
                     })
                     pending = None
+            # 其他企业员工（非客服名单）发言：忽略，不触发首响
         if cur_chat is not None:
             flush_unanswered(cur_chat)
 
@@ -150,7 +166,8 @@ class StaffPerformanceService:
             if ev["timeout"]:
                 a["timeout"] += 1
 
-        # 发言数：客服真实发言条数（排除撤回/表情；文字数单列，直观看工作量）
+        # 发言数：仅客服名单内的人，真实发言条数（排除撤回/表情；文字数单列）
+        staff_list = list(self.staff_names(corp_id))
         speak: Dict[str, Dict[str, Any]] = {}
         rows = self.db.query(
             WxMessage.sender_userid, WxMessage.sender_name,
@@ -158,7 +175,7 @@ class StaffPerformanceService:
             func.sum(case((WxMessage.msg_type == "text", 1), else_=0)).label("texts"),
         ).filter(
             WxMessage.corp_id == corp_id,
-            WxMessage.sender_type == 1,
+            WxMessage.sender_name.in_(staff_list),
             WxMessage.send_time >= start_dt,
             WxMessage.send_time <= end_dt,
             WxMessage.msg_type.notin_(EXCLUDE_SPEAK_TYPES),
