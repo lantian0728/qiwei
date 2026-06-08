@@ -43,7 +43,7 @@
 
       <el-main class="main">
         <router-view v-slot="{ Component }">
-          <keep-alive>
+          <keep-alive :exclude="['GroupDetail']">
             <component :is="Component" />
           </keep-alive>
         </router-view>

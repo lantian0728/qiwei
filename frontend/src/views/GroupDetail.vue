@@ -156,6 +156,8 @@ import * as echarts from 'echarts'
 import { groupApi } from '@/api'
 import { startTask } from '@/utils/loading'
 
+defineOptions({ name: 'GroupDetail' })
+
 const route = useRoute()
 const chatId = route.params.chatId as string
 const group = ref<any>({})
