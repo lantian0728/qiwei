@@ -1,0 +1,19 @@
+# 轻量部署(2G内存服务器)：SQLite + 后端 + 前端，不起 MySQL 容器
+# 用法：docker compose -f docker-compose.lite.yml up -d --build
+services:
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/wxwork.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${HTTP_PORT:-8090}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
