@@ -8,6 +8,8 @@ services:
       DATABASE_URL: sqlite:////app/data/wxwork.db
     volumes:
       - ./data:/app/data
+      - ./secrets:/app/secrets:ro   # 会话存档 RSA 私钥(只读)
+      - ./sdk:/app/sdk:ro           # 会话存档原生 SDK .so(只读)
     restart: unless-stopped
 
   frontend:

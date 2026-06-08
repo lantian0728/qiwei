@@ -16,6 +16,11 @@ dist/
 backend/.env
 frontend/.env
 
+# 会话存档密钥与原生 SDK（绝不提交）
+secrets/
+sdk/
+*.pem
+
 # IDE / OS
 .vscode/
 .idea/
