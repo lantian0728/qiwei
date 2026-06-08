@@ -193,6 +193,57 @@ class AIReportService:
             n += 1
         return {"generated": n, "active_only": True, "date": str(day)}
 
+    async def group_digest(self, corp_id: str, chat_id: str, group_name: str,
+                           day: date = None) -> Dict[str, Any]:
+        """AI 提炼单群当天聊天：客户诉求 / 已处理 / 待办 / 风险 / 一句话总结。
+        这是给老板/客服主管看的『过滤后重点』，不是原始流水。"""
+        day = day or date.today()
+        start_dt = datetime.combine(day, datetime.min.time())
+        end_dt = datetime.combine(day, datetime.max.time())
+        msgs = self.db.query(WxMessage).filter(
+            WxMessage.corp_id == corp_id, WxMessage.chat_id == chat_id,
+            WxMessage.send_time >= start_dt, WxMessage.send_time <= end_dt,
+        ).order_by(WxMessage.send_time).all()
+
+        if not msgs:
+            return {"has_data": False, "message": "今日该群无消息"}
+
+        lines = []
+        for m in msgs[-80:]:
+            tag = "客服" if m.sender_type == 1 else "客户"
+            lines.append(f"{tag}({m.sender_name or ''}): {m.content}")
+        convo = "\n".join(lines)
+
+        empty = {"summary": "", "customer_demands": [], "handled": [],
+                 "todos": [], "risks": []}
+        if not doubao.is_available():
+            return {"has_data": True, "by_ai": False, "msg_count": len(msgs),
+                    "summary": "未配置 AI，无法提炼。可在配置页填智谱 Key。", **empty}
+        try:
+            text = await doubao.chat([
+                {"role": "system", "content": "你是货代公司客服主管助手，只返回JSON，不要解释。"},
+                {"role": "user", "content":
+                    f"这是客户群「{group_name}」今天的聊天记录（C=客户 S=客服）：\n{convo}\n\n"
+                    "请站在货代经营角度提炼，返回JSON："
+                    '{"summary":"一句话说清今天这个群发生了什么",'
+                    '"customer_demands":["客户提出的主要问题/诉求，最多5条"],'
+                    '"handled":["客服已回应或已解决的事，最多5条"],'
+                    '"todos":["还没解决、需要跟进的事，最多5条"],'
+                    '"risks":["投诉/抱怨/催促/比价/要走等风险信号，没有就空数组"]}'},
+            ], timeout=60)
+            d = doubao.parse_json(text)
+            return {
+                "has_data": True, "by_ai": True, "msg_count": len(msgs),
+                "summary": d.get("summary", ""),
+                "customer_demands": d.get("customer_demands", []),
+                "handled": d.get("handled", []),
+                "todos": d.get("todos", []),
+                "risks": d.get("risks", []),
+            }
+        except Exception as e:
+            return {"has_data": True, "by_ai": False, "msg_count": len(msgs),
+                    "summary": f"AI 提炼失败：{str(e)[:60]}", **empty}
+
     def get_summaries(self, corp_id: str, day: date) -> List[Dict[str, Any]]:
         rows = self.db.query(WxGroupDailySummary).filter(
             WxGroupDailySummary.corp_id == corp_id,

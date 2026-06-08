@@ -278,6 +278,49 @@ async def get_group_sentiment(
     return await DoubaoSentimentService(db).analyze_group(corp_id, chat_id, days=days)
 
 
+@router.get("/{chat_id}/messages", summary="群聊天记录(带客服/客户标识)")
+async def get_group_messages(
+    chat_id: str,
+    limit: int = Query(120, ge=1, le=300),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    corp_id = _require_corp_id(current_user)
+    _get_group_or_404(db, corp_id, chat_id)
+    from app.models.models import WxMessage
+    msgs = db.query(WxMessage).filter(
+        WxMessage.corp_id == corp_id, WxMessage.chat_id == chat_id,
+    ).order_by(WxMessage.send_time.desc()).limit(limit).all()
+    msgs.reverse()  # 取最近 N 条后按时间正序展示
+    return {
+        "total": len(msgs),
+        "items": [
+            {
+                "time": m.send_time.strftime("%m-%d %H:%M") if m.send_time else "",
+                "sender_name": m.sender_name or m.sender_userid or "未知",
+                "is_staff": m.sender_type == 1,
+                "role": "客服" if m.sender_type == 1 else "客户",
+                "msg_type": m.msg_type,
+                "content": m.content or "",
+            }
+            for m in msgs
+        ],
+    }
+
+
+@router.get("/{chat_id}/digest", summary="AI提炼群聊重点(过滤后呈现)")
+async def get_group_digest(
+    chat_id: str,
+    day: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    corp_id = _require_corp_id(current_user)
+    g = _get_group_or_404(db, corp_id, chat_id)
+    from app.services.ai_report_service import AIReportService
+    return await AIReportService(db).group_digest(corp_id, chat_id, g.group_name, day)
+
+
 @router.post("/sync", summary="手动触发群列表同步")
 async def trigger_sync(
     background_tasks: BackgroundTasks,

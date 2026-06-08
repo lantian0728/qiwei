@@ -41,7 +41,7 @@
       <el-tab-pane label="按群查件 + 客户匹配" name="group">
         <div class="panel">
           <div class="panel-head">
-            <span>群 ↔ 客户 映射 <el-tag size="small" type="info">豆包识别群名</el-tag></span>
+            <span>群 ↔ 客户 映射 <el-tag size="small" type="info">智谱识别群名</el-tag></span>
             <el-button type="primary" size="small" :loading="matching" @click="runMatch">
               <el-icon><MagicStick /></el-icon> 自动匹配
             </el-button>

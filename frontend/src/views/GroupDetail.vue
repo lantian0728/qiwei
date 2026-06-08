@@ -34,11 +34,11 @@
             <div style="display:flex;justify-content:space-between;align-items:center">
               <b>AI 情绪分析</b>
               <el-button size="small" type="primary" :loading="sentLoading" @click="analyzeSentiment">
-                豆包分析
+                智谱分析
               </el-button>
             </div>
           </template>
-          <div v-if="!sentiment" class="sent-empty">点击「豆包分析」识别群内客户情绪与风险</div>
+          <div v-if="!sentiment" class="sent-empty">点击「智谱分析」识别群内客户情绪与风险</div>
           <div v-else-if="sentiment.available === false" class="sent-empty">
             {{ sentiment.message }}
           </div>
@@ -66,6 +66,60 @@
       </el-col>
 
       <el-col :span="18">
+        <!-- AI 今日提炼：过滤后只看重点 -->
+        <el-card shadow="never" style="margin-bottom:16px">
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>🔍 AI 今日提炼</b>
+              <el-button size="small" type="primary" :loading="digestLoading" @click="loadDigest">
+                让智谱提炼今日
+              </el-button>
+            </div>
+          </template>
+          <div v-if="!digest" class="sent-empty">点「让智谱提炼今日」，把今天这个群的客户诉求 / 待办 / 风险理成几条给你</div>
+          <div v-else-if="!digest.has_data" class="sent-empty">{{ digest.message }}</div>
+          <div v-else>
+            <p class="digest-sum">{{ digest.summary }}</p>
+            <div class="digest-sec" v-if="digest.customer_demands?.length">
+              <span class="dlabel">客户诉求</span>
+              <ul><li v-for="(x,i) in digest.customer_demands" :key="'d'+i">{{ x }}</li></ul>
+            </div>
+            <div class="digest-sec" v-if="digest.handled?.length">
+              <span class="dlabel ok">已处理</span>
+              <ul><li v-for="(x,i) in digest.handled" :key="'h'+i">{{ x }}</li></ul>
+            </div>
+            <div class="digest-sec" v-if="digest.todos?.length">
+              <span class="dlabel warn">待跟进</span>
+              <ul><li v-for="(x,i) in digest.todos" :key="'t'+i">{{ x }}</li></ul>
+            </div>
+            <div class="digest-sec" v-if="digest.risks?.length">
+              <span class="dlabel danger">风险</span>
+              <ul><li v-for="(x,i) in digest.risks" :key="'r'+i">{{ x }}</li></ul>
+            </div>
+          </div>
+        </el-card>
+
+        <!-- 聊天记录 -->
+        <el-card shadow="never" style="margin-bottom:16px">
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>💬 聊天记录（最近 {{ messages.length }} 条）</b>
+              <el-button size="small" :loading="msgLoading" @click="loadMessages">刷新</el-button>
+            </div>
+          </template>
+          <div v-if="!messages.length" class="sent-empty">暂无消息（会话存档同步后显示）</div>
+          <div v-else class="chat-box">
+            <div v-for="(m,i) in messages" :key="'m'+i" class="chat-row" :class="{ staff: m.is_staff }">
+              <div class="chat-meta">
+                <b>{{ m.sender_name }}</b>
+                <span class="role" :class="{ s: m.is_staff }">{{ m.role }}</span>
+                <span class="t">{{ m.time }}</span>
+              </div>
+              <div class="chat-bubble" :class="{ staff: m.is_staff }">{{ m.content }}</div>
+            </div>
+          </div>
+        </el-card>
+
         <el-card shadow="never">
           <template #header><b>近 7 日活跃趋势</b></template>
           <div ref="trendRef" style="height:280px"></div>
@@ -109,6 +163,10 @@ const loading = ref(false)
 
 const sentiment = ref<any>(null)
 const sentLoading = ref(false)
+const digest = ref<any>(null)
+const digestLoading = ref(false)
+const messages = ref<any[]>([])
+const msgLoading = ref(false)
 const RISK_NAMES: any = { none: '无', low: '低', medium: '中', high: '高' }
 const riskName = computed(() => RISK_NAMES[sentiment.value?.risk] ?? sentiment.value?.risk ?? '-')
 const sentTagType = computed(() => {
@@ -126,6 +184,26 @@ const analyzeSentiment = async () => {
     sentiment.value = await groupApi.sentiment(chatId, 7)
   } finally {
     sentLoading.value = false
+  }
+}
+
+const loadDigest = async () => {
+  digestLoading.value = true
+  try {
+    digest.value = await groupApi.digest(chatId)
+  } catch (e: any) {
+    ElMessage.error('提炼失败：' + (e?.response?.data?.detail || e?.message || '稍后重试'))
+  } finally {
+    digestLoading.value = false
+  }
+}
+
+const loadMessages = async () => {
+  msgLoading.value = true
+  try {
+    messages.value = ((await groupApi.messages(chatId)) as any).items || []
+  } finally {
+    msgLoading.value = false
   }
 }
 const trendRef = ref<HTMLElement>()
@@ -170,6 +248,7 @@ onMounted(async () => {
   try {
     group.value = await groupApi.detail(chatId)
     stats.value = await groupApi.stats(chatId, {})
+    await loadMessages()
     await nextTick()
     renderTrend()
     renderHour()
@@ -184,4 +263,23 @@ onMounted(async () => {
 .metric span { color: #909399; font-size: 13px; }
 .metric b { color: #303133; }
 .sent-empty { color: #909399; font-size: 13px; text-align: center; padding: 12px 0; }
+.digest-sum { font-weight: 600; color: #303133; margin: 0 0 12px; line-height: 1.6; }
+.digest-sec { margin-bottom: 10px; }
+.dlabel { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 4px; background: #ecf5ff; color: #409EFF; }
+.dlabel.ok { background: #f0f9eb; color: #67C23A; }
+.dlabel.warn { background: #fdf6ec; color: #E6A23C; }
+.dlabel.danger { background: #fef0f0; color: #F56C6C; }
+.digest-sec ul { margin: 4px 0 0; padding-left: 18px; }
+.digest-sec li { font-size: 13px; color: #606266; line-height: 1.7; }
+.chat-box { max-height: 420px; overflow-y: auto; padding: 4px; }
+.chat-row { margin-bottom: 12px; }
+.chat-row.staff { text-align: right; }
+.chat-meta { font-size: 12px; color: #909399; margin-bottom: 2px; }
+.chat-meta b { color: #606266; margin-right: 6px; }
+.chat-meta .role { background: #f4f4f5; color: #909399; padding: 0 6px; border-radius: 3px; margin-right: 6px; }
+.chat-meta .role.s { background: #ecf5ff; color: #409EFF; }
+.chat-meta .t { color: #c0c4cc; }
+.chat-bubble { display: inline-block; max-width: 75%; text-align: left; padding: 8px 12px; border-radius: 8px;
+  background: #f4f4f5; color: #303133; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.chat-bubble.staff { background: #ecf5ff; color: #1f6fd6; }
 </style>

@@ -31,12 +31,12 @@
 
         <!-- AI 今日群情报 -->
         <div class="panel" style="margin-top:16px">
-          <div class="panel-head"><span>AI 今日群情报</span><el-tag size="small" type="info">豆包</el-tag></div>
+          <div class="panel-head"><span>AI 今日群情报</span><el-tag size="small" type="info">智谱</el-tag></div>
           <div class="ai-brief">
             <el-icon class="ai-ico" :size="18"><MagicStick /></el-icon>
             <span>{{ aiBrief }}</span>
           </div>
-          <div class="ai-tip">提示：在群档案页点「豆包分析」可生成单群情绪与风险洞察；后续将自动每日推送全局情报。</div>
+          <div class="ai-tip">提示：在群档案页点「智谱分析」可生成单群情绪与风险洞察；后续将自动每日推送全局情报。</div>
         </div>
       </el-col>
 

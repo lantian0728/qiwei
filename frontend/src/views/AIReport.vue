@@ -5,7 +5,7 @@
         <el-icon :size="20" color="#9254DE"><MagicStick /></el-icon>
         <span>AI 群日报</span>
         <el-tag size="small" :type="byAi ? 'success' : 'info'">
-          {{ byAi ? '豆包AI生成' : '规则版(未配置豆包)' }}
+          {{ byAi ? '智谱AI生成' : '规则版(未配置智谱)' }}
         </el-tag>
       </div>
       <div class="ops">

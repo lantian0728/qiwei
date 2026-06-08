@@ -20,6 +20,8 @@ export const groupApi = {
   members: (chatId: string, params: any) => request.get(`/groups/${chatId}/members`, { params }),
   stats: (chatId: string, params: any) => request.get(`/groups/${chatId}/stats`, { params }),
   sentiment: (chatId: string, days = 7) => request.get(`/groups/${chatId}/sentiment`, { params: { days } }),
+  messages: (chatId: string, limit = 120) => request.get(`/groups/${chatId}/messages`, { params: { limit } }),
+  digest: (chatId: string, day?: string) => request.get(`/groups/${chatId}/digest`, { params: { day } }),
   update: (chatId: string, data: any) => request.patch(`/groups/${chatId}`, data),
   sync: () => request.post('/groups/sync'),
 }
