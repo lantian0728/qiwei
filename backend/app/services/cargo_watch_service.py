@@ -40,7 +40,7 @@ class CargoWatchService:
         self.db = db
 
     async def scan_problems(self, corp_id: str, max_pages: int = 20,
-                            page_size: int = 50, overdue_ready_days: int = 5) -> List[Dict[str, Any]]:
+                            page_size: int = 50, overdue_ready_days: int = 7) -> List[Dict[str, Any]]:
         if not nextsls.is_available():
             return []
         client = NextSLSClient()
@@ -73,7 +73,7 @@ class CargoWatchService:
                 if active and eta and eta < now:
                     issues.append(f"超预计到达{(now - eta).days}天")
                 created = _parse_time(s.get("created"))
-                if status == "ready" and created and (now - created).days >= overdue_ready_days:
+                if status == "ready" and created and (now - created).days > overdue_ready_days:
                     issues.append(f"下单{(now - created).days}天未发货")
                 if not issues:
                     continue
