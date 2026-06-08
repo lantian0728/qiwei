@@ -119,11 +119,13 @@ class ChatArchiveService:
             }
         return self._ent_cache
 
-    def _is_staff(self, sender: str) -> bool:
-        """是不是客服(企业员工)。企微外部客户 external_userid 以 wm 开头，企业员工 userid 不会。"""
-        if not sender or sender.startswith("wm"):
-            return False
-        return sender in self._enterprise_userids()
+    def _is_staff(self, sender: str, name: str = "") -> bool:
+        """是不是自己人。名字带'云象'、或在企业通讯录内 → 自己人；其余(外部 wm 且名字无云象) → 客户。"""
+        if name and "云象" in name:
+            return True
+        if sender and not sender.startswith("wm") and sender in self._enterprise_userids():
+            return True
+        return False
 
     def _get_seq(self) -> int:
         row = self.db.query(WxSystemConfig).filter(
@@ -288,8 +290,8 @@ class ChatArchiveService:
             if roomid not in member_cache:
                 member_cache[roomid] = self._staff_ids(roomid)
             members = member_cache[roomid]
-            is_staff = self._is_staff(sender)
             sender_name = members.get(sender, sender)
+            is_staff = self._is_staff(sender, sender_name)
             mtype = msg.get("msgtype", "") or "text"
             content = msg.get("content", "") or (f"[{mtype}]" if mtype != "text" else "")
             ts = msg.get("msgtime", 0)
