@@ -16,6 +16,25 @@ from app.api import auth, groups, admin, alerts, staff, dashboard, ai, churn, tr
 async def lifespan(app: FastAPI):
     # 建表
     Base.metadata.create_all(bind=engine)
+
+    # 真实企业：配了 CorpID + Secret 就自动写入企业配置，「快速登录」后即可同步真实群
+    if settings.WX_CORP_ID and settings.WX_CORP_SECRET:
+        from app.models.models import WxCorpConfig
+        db = SessionLocal()
+        try:
+            cfg = db.query(WxCorpConfig).filter(
+                WxCorpConfig.corp_id == settings.WX_CORP_ID
+            ).first()
+            if not cfg:
+                cfg = WxCorpConfig(corp_id=settings.WX_CORP_ID)
+                db.add(cfg)
+            cfg.agent_id = settings.WX_AGENT_ID or cfg.agent_id
+            cfg.corp_secret = settings.WX_CORP_SECRET
+            cfg.is_active = True
+            db.commit()
+        finally:
+            db.close()
+
     # 演示模式：首次启动自动生成演示数据
     if settings.DEMO_MODE:
         from app.services.sync_service import MockDataService

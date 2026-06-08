@@ -101,23 +101,26 @@ async def login_with_wxwork(req: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/login/demo", summary="演示模式登录（无需企微凭证）")
+@router.post("/login/demo", summary="快速登录（演示数据 或 已配置的真实企业）")
 async def login_demo(db: Session = Depends(get_db)):
     """
-    演示登录：签发一个 demo 企业的只读令牌，便于本地查看界面与模拟数据。
-    生产环境可通过 settings.DEMO_MODE=false 关闭。
+    快速登录：
+    - 配置了 WX_CORP_ID + WX_CORP_SECRET → 以真实企业管理员身份登录（看真实数据）
+    - 否则 DEMO_MODE 下 → 演示企业（看模拟数据）
     """
-    if not settings.DEMO_MODE:
-        raise HTTPException(status_code=403, detail="演示模式已禁用，请使用企业微信登录")
+    real = bool(settings.WX_CORP_ID and settings.WX_CORP_SECRET)
+    if not settings.DEMO_MODE and not real:
+        raise HTTPException(status_code=403, detail="请使用企业微信授权登录")
 
-    corp_id = "demo_corp"
-    userid = "demo_admin"
+    corp_id = settings.WX_CORP_ID if real else "demo_corp"
+    userid = "admin"
+    display = "管理员" if real else "演示管理员"
     user = db.query(SysUser).filter(
         SysUser.corp_id == corp_id, SysUser.userid == userid
     ).first()
     if not user:
-        user = SysUser(corp_id=corp_id, userid=userid, username="演示管理员",
-                       real_name="演示管理员", role=1)
+        user = SysUser(corp_id=corp_id, userid=userid, username=display,
+                       real_name=display, role=1)
         db.add(user)
     user.last_login_at = datetime.now()
     db.commit()

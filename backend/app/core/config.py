@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     # 企业微信
     WX_CORP_ID: str = ""
+    WX_AGENT_ID: str = ""
+    WX_CORP_SECRET: str = ""   # 自建应用Secret(含客户联系权限),配置后自动接入真实企业
 
     # CORS（逗号分隔）
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
