@@ -58,9 +58,9 @@ def archive_sync_job():
     try:
         from app.services.activity_service import ActivityLevelService
         from app.services.churn_service import ChurnService
-        ActivityLevelService(db).recompute(corp, today)        # 统计+活跃度(无AI,可高频)
+        ActivityLevelService(db).recompute_daily_stats(corp, today)  # 只算今日统计(轻,高频)
         ChurnService(db).generate_alerts(corp)                 # 流失预警(无AI)
-        print(f"[archive_sync] 入库 {r['stored']} 条并已重算统计")
+        print(f"[archive_sync] 入库 {r['stored']} 条并已重算今日统计")
     except Exception as e:
         print(f"[archive_sync] 重算失败: {e}")
     finally:
@@ -75,7 +75,9 @@ def ai_report_job():
     corp = settings.WX_ARCHIVE_CORPID or settings.WX_CORP_ID
     db = SessionLocal()
     try:
+        from app.services.activity_service import ActivityLevelService
         from app.services.ai_report_service import AIReportService
+        ActivityLevelService(db).recompute_all(corp)   # 全量活跃度评分(变化慢,低频)
         asyncio.run(AIReportService(db).generate_active(corp, date.today()))
     except Exception as e:
         print(f"[ai_report] 失败: {e}")
@@ -104,8 +106,8 @@ def start_scheduler():
                       id="auto_analysis", replace_existing=True)
     scheduler.add_job(tracking_watch_job, "interval", minutes=30,
                       id="tracking_watch", replace_existing=True)
-    # 会话存档同步+统计(无AI)：每 3 分钟，消息/客服效能/活跃度准实时
-    scheduler.add_job(archive_sync_job, "interval", minutes=3,
+    # 会话存档同步+今日统计(无AI,轻)：每 1 分钟，消息/客服效能准实时
+    scheduler.add_job(archive_sync_job, "interval", minutes=1,
                       id="archive_sync", replace_existing=True)
     # AI 日报(调智谱1QPS)：每 30 分钟，避免和高频同步撞限频
     scheduler.add_job(ai_report_job, "interval", minutes=30,
