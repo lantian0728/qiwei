@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     WX_ARCHIVE_SECRET: str = ""          # 会话存档专用 Secret
     WX_ARCHIVE_SDK_PATH: str = ""        # libWeWorkFinanceSdk_C.so 绝对路径
     WX_ARCHIVE_PRIVATE_KEY_PATH: str = ""  # RSA 私钥 PEM 文件路径(公钥已传企微后台)
+    WX_ARCHIVE_PUBLIC_KEY_VER: int = 0   # 只解此版本公钥加密的消息；0=不限(私钥不符会崩，务必设为后台贴的版本号)
 
     @property
     def cors_origin_list(self) -> List[str]:

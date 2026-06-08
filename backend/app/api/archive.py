@@ -35,3 +35,23 @@ async def archive_sync(
 
     background_tasks.add_task(do_sync)
     return {"success": True, "message": "会话存档同步已触发"}
+
+
+@router.post("/fast-forward", summary="快速跳过历史，游标顶到最新(贴新公钥后用一次)")
+async def archive_fast_forward(
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    if not wework_finance.is_available():
+        return {"success": False, "message": "未配置会话存档"}
+
+    def do_ff():
+        db = SessionLocal()
+        try:
+            from app.services.chat_archive_service import ChatArchiveService
+            ChatArchiveService(db).fast_forward()
+        finally:
+            db.close()
+
+    background_tasks.add_task(do_ff)
+    return {"success": True, "message": "已开始快速跳过历史，游标将顶到最新"}

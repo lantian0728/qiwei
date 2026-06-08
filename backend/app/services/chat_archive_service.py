@@ -56,15 +56,38 @@ class ChatArchiveService:
             ).all()
         }
 
+    def fast_forward(self, batch_limit: int = 1000) -> Dict[str, Any]:
+        """快速把游标顶到最新：只读 seq、不解密，跳过全部历史(避免逐条解密旧版本崩溃)。
+        贴新公钥后调用一次，之后日常 sync 只处理新产生的消息。"""
+        if not wework_finance.is_available():
+            return {"available": False, "message": "未配置会话存档"}
+        sdk = wework_finance.WeWorkFinanceSDK()
+        seq = self._get_seq()
+        scanned = 0
+        try:
+            while True:
+                records = sdk.get_chat_data(seq, batch_limit)
+                if not records:
+                    break
+                seq = max(int(r.get("seq", seq)) for r in records)
+                scanned += len(records)
+                self._set_seq(seq)
+                if len(records) < batch_limit:
+                    break
+        finally:
+            sdk.close()
+        return {"available": True, "scanned": scanned, "seq": seq}
+
     def sync(self, max_batches: int = 50, batch_limit: int = 100) -> Dict[str, Any]:
         if not wework_finance.is_available():
             return {"available": False,
                     "message": "未配置会话存档(SDK路径/Secret/私钥)，仅服务器可用"}
 
+        target_ver = settings.WX_ARCHIVE_PUBLIC_KEY_VER  # 只解此版本；0=不限
         sdk = wework_finance.WeWorkFinanceSDK()
         rooms = self._monitored_rooms()
         seq = self._get_seq()
-        stored = skipped = 0
+        stored = skipped = ver_skipped = 0
         member_cache: Dict[str, Dict[str, str]] = {}
 
         try:
@@ -74,6 +97,10 @@ class ChatArchiveService:
                     break
                 for rec in records:
                     seq = max(seq, int(rec.get("seq", seq)))
+                    # 关键：版本不符的消息(旧密钥加密)直接跳过，绝不调解密，避免 C 层崩溃
+                    if target_ver and int(rec.get("publickey_ver", 0)) != target_ver:
+                        ver_skipped += 1
+                        continue
                     try:
                         msg = sdk.decrypt_message(
                             rec["encrypt_random_key"], rec["encrypt_chat_msg"])
@@ -90,7 +117,8 @@ class ChatArchiveService:
         finally:
             sdk.close()
 
-        return {"available": True, "stored": stored, "skipped": skipped, "seq": seq}
+        return {"available": True, "stored": stored, "skipped": skipped,
+                "ver_skipped": ver_skipped, "seq": seq}
 
     def _store_message(self, msg: Dict[str, Any], rooms: set,
                        member_cache: Dict[str, Dict[str, str]]) -> bool:
