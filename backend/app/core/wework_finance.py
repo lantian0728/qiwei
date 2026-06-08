@@ -61,10 +61,18 @@ class WeWorkFinanceSDK:
         self.lib.NewSlice.restype = c.c_void_p
         self.lib.FreeSlice.argtypes = [c.c_void_p]
         self.lib.GetContentFromSlice.argtypes = [c.c_void_p]
-        self.lib.GetContentFromSlice.restype = c.c_char_p
+        self.lib.GetContentFromSlice.restype = c.c_void_p  # 裸指针，配合 GetSliceLen 按长度读，勿当NUL结尾字符串
         self.lib.GetSliceLen.argtypes = [c.c_void_p]
         self.lib.GetSliceLen.restype = c.c_int
         self.lib.DestroySdk.argtypes = [c.c_void_p]
+
+    def _read_slice(self, slice_ptr) -> bytes:
+        """按 Slice 的 len 精确读取 buf，避免把非 NUL 结尾的缓冲当字符串越界读。"""
+        n = self.lib.GetSliceLen(slice_ptr)
+        ptr = self.lib.GetContentFromSlice(slice_ptr)
+        if not ptr or n <= 0:
+            return b""
+        return self.ctypes.string_at(ptr, n)
 
     def get_chat_data(self, seq: int, limit: int = 100) -> List[Dict[str, Any]]:
         slice_ptr = self.lib.NewSlice()
@@ -72,7 +80,7 @@ class WeWorkFinanceSDK:
             ret = self.lib.GetChatData(self.sdk, seq, limit, b"", b"", 5, slice_ptr)
             if ret != 0:
                 raise RuntimeError(f"GetChatData 失败, code={ret}")
-            content = self.lib.GetContentFromSlice(slice_ptr)
+            content = self._read_slice(slice_ptr)
             data = json.loads(content.decode("utf-8"))
         finally:
             self.lib.FreeSlice(slice_ptr)
@@ -85,7 +93,7 @@ class WeWorkFinanceSDK:
             ret = self.lib.DecryptData(aes_key, encrypt_chat_msg.encode(), slice_ptr)
             if ret != 0:
                 raise RuntimeError(f"DecryptData 失败, code={ret}")
-            content = self.lib.GetContentFromSlice(slice_ptr)
+            content = self._read_slice(slice_ptr)
             return json.loads(content.decode("utf-8"))
         finally:
             self.lib.FreeSlice(slice_ptr)
