@@ -38,6 +38,12 @@
             <el-table-column type="index" label="#" width="50" />
             <el-table-column prop="name" label="客服" min-width="100" />
             <el-table-column prop="group_count" label="管群数" width="80" align="center" />
+            <el-table-column prop="speak_count" label="发言数" width="110" align="center" sortable>
+              <template #default="{ row }">
+                <b style="color:#409EFF;font-size:15px">{{ row.speak_count }}</b>
+                <span style="color:#c0c4cc;font-size:12px"> ({{ row.text_count }}文字)</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="answered_count" label="响应数" width="80" align="center" />
             <el-table-column label="平均首响" width="100" align="center" sortable
                              :sort-by="'avg_first_response'">

@@ -11,9 +11,13 @@ import statistics
 from datetime import date, datetime, timedelta
 from typing import Optional, Dict, Any, List
 
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
 from app.models.models import WxMessage, WxGroup, WxGroupMember, WxSystemConfig
+
+# 撤回/表情不计入有效发言（撤回是收回、表情非实质沟通）
+EXCLUDE_SPEAK_TYPES = ("revoke", "emotion")
 
 DEFAULT_WORK_START = 9
 DEFAULT_WORK_END = 21
@@ -121,6 +125,8 @@ class StaffPerformanceService:
     # ---------- 客服排名榜 ----------
     def staff_ranking(self, corp_id: str, start_date: date, end_date: date) -> List[Dict[str, Any]]:
         events = self._build_events(corp_id, start_date, end_date)
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(end_date, datetime.max.time())
 
         # 每个客服管的群数（企业成员身份）
         staff_groups: Dict[str, set] = {}
@@ -131,7 +137,7 @@ class StaffPerformanceService:
         ).all():
             staff_groups.setdefault(mem.userid, set()).add(mem.chat_id)
 
-        # 每个客服发言数
+        # 首响事件聚合
         agg: Dict[str, Dict[str, Any]] = {}
         for ev in events:
             if not ev["answered"]:
@@ -144,21 +150,41 @@ class StaffPerformanceService:
             if ev["timeout"]:
                 a["timeout"] += 1
 
+        # 发言数：客服真实发言条数（排除撤回/表情；文字数单列，直观看工作量）
+        speak: Dict[str, Dict[str, Any]] = {}
+        rows = self.db.query(
+            WxMessage.sender_userid, WxMessage.sender_name,
+            func.count(WxMessage.id).label("total"),
+            func.sum(case((WxMessage.msg_type == "text", 1), else_=0)).label("texts"),
+        ).filter(
+            WxMessage.corp_id == corp_id,
+            WxMessage.sender_type == 1,
+            WxMessage.send_time >= start_dt,
+            WxMessage.send_time <= end_dt,
+            WxMessage.msg_type.notin_(EXCLUDE_SPEAK_TYPES),
+        ).group_by(WxMessage.sender_userid, WxMessage.sender_name).all()
+        for uid, nm, total, texts in rows:
+            speak[uid] = {"name": nm, "speak": int(total or 0), "texts": int(texts or 0)}
+
         result = []
-        for uid, a in agg.items():
+        for uid in set(agg) | set(speak):
+            a = agg.get(uid, {"name": None, "waits": [], "timeout": 0, "answered": 0})
+            s = speak.get(uid, {})
             waits = a["waits"]
             result.append({
                 "userid": uid,
-                "name": a["name"],
+                "name": s.get("name") or a.get("name") or uid,
                 "group_count": len(staff_groups.get(uid, set())),
+                "speak_count": s.get("speak", 0),
+                "text_count": s.get("texts", 0),
                 "answered_count": a["answered"],
                 "avg_first_response": round(statistics.mean(waits), 1) if waits else 0,
                 "median_first_response": round(statistics.median(waits), 1) if waits else 0,
                 "timeout_count": a["timeout"],
                 "timeout_rate": round(a["timeout"] / a["answered"] * 100, 1) if a["answered"] else 0,
             })
-        # 按响应数降序、超时率升序
-        result.sort(key=lambda x: (-x["answered_count"], x["timeout_rate"]))
+        # 按发言数降序（直观看工作量），其次首响数
+        result.sort(key=lambda x: (-x["speak_count"], -x["answered_count"]))
         return result
 
     # ---------- 概览 ----------

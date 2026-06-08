@@ -71,6 +71,8 @@ class WxGroup(Base):
     is_problem_group = Column(Boolean, default=False, comment="问题群")
     is_monitored = Column(Boolean, default=True, comment="是否纳入监测")
     tags = Column(String(512), default="")
+    client_kind = Column(String(16), default="unknown", comment="direct直客/agent代理/unknown未判定")
+    client_kind_conf = Column(Integer, default=0, comment="代理/直客分类置信度0-100")
 
     last_msg_time = Column(DateTime, nullable=True)
     last_synced_at = Column(DateTime, nullable=True)

@@ -141,6 +141,29 @@ async def get_overview(
     }
 
 
+# ========== 代理/直客分类 ==========
+
+@router.post("/classify/run", summary="AI分类群：代理/直客")
+async def classify_run(
+    only_unknown: bool = Query(False, description="只分还没判定的群"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    corp_id = _require_corp_id(current_user)
+    from app.services.group_classify_service import GroupClassifyService
+    return await GroupClassifyService(db).classify_all(corp_id, only_unknown)
+
+
+@router.get("/classify/summary", summary="代理/直客数量统计")
+async def classify_summary(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    corp_id = _require_corp_id(current_user)
+    from app.services.group_classify_service import GroupClassifyService
+    return GroupClassifyService(db).summary(corp_id)
+
+
 # ========== 单群详情 ==========
 
 @router.get("/{chat_id}", summary="获取群详情")
@@ -383,6 +406,7 @@ def _format_group(group: WxGroup, detail: bool = False) -> dict:
         "activity_score": float(group.activity_score),
         "is_key_group": group.is_key_group, "is_problem_group": group.is_problem_group,
         "is_monitored": group.is_monitored, "tags": group.tags,
+        "client_kind": group.client_kind, "client_kind_conf": group.client_kind_conf,
         "last_msg_time": group.last_msg_time.isoformat() if group.last_msg_time else None,
         "last_synced_at": group.last_synced_at.isoformat() if group.last_synced_at else None,
         "create_time": group.create_time.isoformat() if group.create_time else None,

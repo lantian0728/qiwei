@@ -24,6 +24,9 @@ export const groupApi = {
   digest: (chatId: string, day?: string) => request.get(`/groups/${chatId}/digest`, { params: { day } }),
   update: (chatId: string, data: any) => request.patch(`/groups/${chatId}`, data),
   sync: () => request.post('/groups/sync'),
+  classifyRun: (only_unknown = false) =>
+    request.post('/groups/classify/run', {}, { params: { only_unknown }, timeout: 180000 }),
+  classifySummary: () => request.get('/groups/classify/summary'),
 }
 
 // ========== 后台配置 ==========
