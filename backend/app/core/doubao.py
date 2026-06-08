@@ -3,6 +3,7 @@
 未配置 DOUBAO_API_KEY 时 is_available() 返回 False，调用方应走规则兜底。
 """
 import json
+import asyncio
 from typing import List, Dict, Any
 
 import httpx
@@ -14,8 +15,10 @@ def is_available() -> bool:
     return bool(settings.DOUBAO_API_KEY)
 
 
-async def chat(messages: List[Dict[str, str]], temperature: float = 0.3, timeout: int = 30) -> str:
-    """调用 Ark chat/completions，返回模型文本。"""
+async def chat(messages: List[Dict[str, str]], temperature: float = 0.3,
+               timeout: int = 30, max_retries: int = 2) -> str:
+    """调用大模型 chat/completions（OpenAI 兼容），返回文本。
+    免费版限频(429/1302)时自动退避重试。"""
     payload = {
         "model": settings.DOUBAO_MODEL,
         "messages": messages,
@@ -25,14 +28,26 @@ async def chat(messages: List[Dict[str, str]], temperature: float = 0.3, timeout
         "Authorization": f"Bearer {settings.DOUBAO_API_KEY}",
         "Content-Type": "application/json",
     }
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            f"{settings.DOUBAO_BASE_URL}/chat/completions",
-            json=payload, headers=headers,
-        )
+    last_err = None
+    for attempt in range(max_retries + 1):
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{settings.DOUBAO_BASE_URL}/chat/completions",
+                json=payload, headers=headers,
+            )
+            data = resp.json()
+        # 限频：等待后重试
+        err = data.get("error") if isinstance(data, dict) else None
+        rate_limited = resp.status_code == 429 or (
+            isinstance(err, dict) and str(err.get("code")) in ("1302", "429"))
+        if rate_limited and attempt < max_retries:
+            await asyncio.sleep(2 + attempt * 2)
+            continue
+        if err:
+            raise RuntimeError(f"LLM错误: {err}")
         resp.raise_for_status()
-        data = resp.json()
-    return data["choices"][0]["message"]["content"].strip()
+        return data["choices"][0]["message"]["content"].strip()
+    raise RuntimeError(f"LLM限频重试失败: {last_err}")
 
 
 def parse_json(text: str) -> Dict[str, Any]:
