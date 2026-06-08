@@ -29,43 +29,77 @@ def _current_seq() -> int:
         db.close()
 
 
-def run_worker(mode: str = "sync", retries: int = 60, timeout: int = 900) -> Dict[str, Any]:
-    """在独立子进程执行 SDK 操作，隔离原生库的偶发 free() 崩溃。
-    子进程崩溃(非0退出/无RESULT)则从已落库游标续传重试；游标连续不前进判定坏数据并停。"""
+def _advance_seq(seq: int):
+    """只增不减地推进游标(独立 session)。"""
+    from app.core.database import SessionLocal
+    db = SessionLocal()
+    try:
+        svc = ChatArchiveService(db)
+        if seq > svc._get_seq():
+            svc._set_seq(seq)
+    finally:
+        db.close()
+
+
+def run_worker(mode: str = "sync", max_batches: int = 20, limit: int = 1000,
+               max_rounds: int = 600, timeout: int = 600) -> Dict[str, Any]:
+    """分段驱动纯-SDK 子进程；worker 只取数解密、主进程负责写库与推进游标。
+    单段崩溃(无RESULT)则同位置重试，连续卡 3 次跳过该坏段，避免死循环。"""
     if not wework_finance.is_available():
         return {"available": False, "message": "未配置会话存档"}
-    crashes = 0
+    from app.core.database import SessionLocal
+
+    total_scanned = total_stored = crashes = skipped_segs = 0
     stuck = 0
-    last_err = "crashed"
-    for _ in range(retries):
-        before = _current_seq()
+    last_err = ""
+    for _ in range(max_rounds):
+        start = _current_seq()
         try:
             p = subprocess.run(
-                [sys.executable, "-m", "app.services.archive_worker", mode],
+                [sys.executable, "-m", "app.services.archive_worker",
+                 mode, str(start), str(max_batches), str(limit)],
                 capture_output=True, text=True, timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            last_err = "worker 超时"
             crashes += 1
-            continue
-        for line in (p.stdout or "").splitlines():
-            if line.startswith("RESULT "):
-                res = json.loads(line[len("RESULT "):])
-                res["crashes"] = crashes
-                return res
-        # 没有 RESULT = 子进程崩了
-        crashes += 1
-        errlines = (p.stderr or "").strip().splitlines()
-        last_err = errlines[-1][-150:] if errlines else "crashed"
-        after = _current_seq()
-        if after <= before:
             stuck += 1
             if stuck >= 3:
-                return {"available": True, "error": "worker 在同一位置反复崩溃(疑似坏数据)",
-                        "seq": after, "crashes": crashes, "detail": last_err}
-        else:
-            stuck = 0
-    return {"available": True, "error": "worker 崩溃次数达上限", "crashes": crashes, "detail": last_err}
+                _advance_seq(start + limit); skipped_segs += 1; stuck = 0
+            continue
+
+        res = None
+        for line in (p.stdout or "").splitlines():
+            if line.startswith("RESULT "):
+                res = json.loads(line[len("RESULT "):]); break
+
+        if res is None:  # 子进程崩了
+            crashes += 1
+            stuck += 1
+            errlines = (p.stderr or "").strip().splitlines()
+            last_err = errlines[-1][-150:] if errlines else "crashed"
+            if stuck >= 3:  # 同段反复崩 → 跳过一个批长，避免卡死
+                _advance_seq(start + limit); skipped_segs += 1; stuck = 0
+            continue
+
+        stuck = 0
+        total_scanned += res.get("scanned", 0)
+        if mode == "sync" and res.get("messages"):
+            db = SessionLocal()
+            try:
+                total_stored += ChatArchiveService(db)._store_worker_messages(res["messages"])
+            finally:
+                db.close()
+        _advance_seq(res.get("end_seq", start))
+        if res.get("reached_end"):
+            break
+
+    out = {"available": True, "scanned": total_scanned, "seq": _current_seq(),
+           "crashes": crashes, "skipped_segments": skipped_segs}
+    if mode == "sync":
+        out["stored"] = total_stored
+    if last_err:
+        out["last_err"] = last_err
+    return out
 
 
 class ChatArchiveService:
@@ -216,3 +250,42 @@ class ChatArchiveService:
         ))
         self.db.commit()
         return True
+
+    def _store_worker_messages(self, messages: list) -> int:
+        """主进程入库：worker 子进程解密好的精简消息，过滤监测群后写 WxMessage。"""
+        rooms = self._monitored_rooms()
+        member_cache: Dict[str, Dict[str, str]] = {}
+        stored = 0
+        for msg in messages:
+            roomid = msg.get("roomid")
+            if not roomid or roomid not in rooms:
+                continue
+            msgid = msg.get("msgid", "")
+            if msgid and self.db.query(WxMessage.id).filter(
+                WxMessage.corp_id == self.corp_id, WxMessage.chat_id == roomid,
+                WxMessage.msgid == msgid,
+            ).first():
+                continue
+            sender = msg.get("from", "")
+            if roomid not in member_cache:
+                member_cache[roomid] = self._staff_ids(roomid)
+            members = member_cache[roomid]
+            is_staff = sender in members
+            sender_name = members.get(sender, sender)
+            mtype = msg.get("msgtype", "") or "text"
+            content = msg.get("content", "") or (f"[{mtype}]" if mtype != "text" else "")
+            ts = msg.get("msgtime", 0)
+            try:
+                send_time = datetime.fromtimestamp(int(ts) / 1000)
+            except Exception:
+                send_time = datetime.now()
+            self.db.add(WxMessage(
+                corp_id=self.corp_id, chat_id=roomid, msgid=msgid,
+                sender_userid=sender, sender_name=sender_name,
+                sender_type=1 if is_staff else 2,
+                msg_type=mtype, content=content,
+                is_at=False, send_time=send_time,
+            ))
+            stored += 1
+        self.db.commit()
+        return stored
