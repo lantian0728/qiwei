@@ -7,6 +7,7 @@
 - 超时阈值(SLA)：默认 30 分钟，工作时间内超过算超时
 统计维度：按客服(企业成员) + 按群 双视角
 """
+import re
 import statistics
 from datetime import date, datetime, timedelta
 from typing import Optional, Dict, Any, List
@@ -18,6 +19,18 @@ from app.models.models import WxMessage, WxGroup, WxGroupMember, WxSystemConfig
 
 # 撤回/表情不计入有效发言（撤回是收回、表情非实质沟通）
 EXCLUDE_SPEAK_TYPES = ("revoke", "emotion")
+
+# 敷衍套话：客服首响只回这些，不算真正处理（防"假首响"刷指标）
+PERFUNCTORY_WORDS = {
+    "收到", "好的", "好", "好哒", "好滴", "在", "嗯", "嗯嗯", "嗯呢", "ok", "okok",
+    "马上", "稍等", "稍", "看下", "看一下", "了解", "收", "明白", "知道了", "👌",
+}
+
+
+def _is_perfunctory(text: str) -> bool:
+    """首响是否敷衍套话(没实质内容)。"""
+    t = re.sub(r"[\s,，。.!！~、:：\[\]]+", "", (text or "")).lower()
+    return (not t) or t in PERFUNCTORY_WORDS or len(t) <= 2
 
 # 客服名单：默认放已知客服，可在配置里用 staff_names 覆盖（逗号分隔姓名）
 STAFF_NAMES_KEY = "staff_names"
@@ -130,6 +143,7 @@ class StaffPerformanceService:
                         "staff_name": m.sender_name or m.sender_userid,
                         "wait_min": round(wait, 1), "answered": True,
                         "timeout": biz and wait > sla, "in_business": biz,
+                        "perfunctory": _is_perfunctory(m.content),
                     })
                     pending = None
             # 其他企业员工（非客服名单）发言：忽略，不触发首响
@@ -159,12 +173,14 @@ class StaffPerformanceService:
             if not ev["answered"]:
                 continue
             uid = ev["staff_userid"]
-            a = agg.setdefault(uid, {"name": ev["staff_name"], "waits": [], "timeout": 0, "answered": 0})
+            a = agg.setdefault(uid, {"name": ev["staff_name"], "waits": [], "timeout": 0, "answered": 0, "perfunctory": 0})
             a["answered"] += 1
             if ev.get("in_business"):
                 a["waits"].append(ev["wait_min"])
             if ev["timeout"]:
                 a["timeout"] += 1
+            if ev.get("perfunctory"):
+                a["perfunctory"] += 1
 
         # 发言数：仅客服名单内的人，真实发言条数（排除撤回/表情；文字数单列）
         staff_list = list(self.staff_names(corp_id))
@@ -185,20 +201,24 @@ class StaffPerformanceService:
 
         result = []
         for uid in set(agg) | set(speak):
-            a = agg.get(uid, {"name": None, "waits": [], "timeout": 0, "answered": 0})
+            a = agg.get(uid, {"name": None, "waits": [], "timeout": 0, "answered": 0, "perfunctory": 0})
             s = speak.get(uid, {})
             waits = a["waits"]
+            answered = a["answered"]
+            perf = a.get("perfunctory", 0)
             result.append({
                 "userid": uid,
                 "name": s.get("name") or a.get("name") or uid,
                 "group_count": len(staff_groups.get(uid, set())),
                 "speak_count": s.get("speak", 0),
                 "text_count": s.get("texts", 0),
-                "answered_count": a["answered"],
+                "answered_count": answered,
+                "perfunctory_count": perf,
+                "perfunctory_rate": round(perf / answered * 100, 1) if answered else 0,
                 "avg_first_response": round(statistics.mean(waits), 1) if waits else 0,
                 "median_first_response": round(statistics.median(waits), 1) if waits else 0,
                 "timeout_count": a["timeout"],
-                "timeout_rate": round(a["timeout"] / a["answered"] * 100, 1) if a["answered"] else 0,
+                "timeout_rate": round(a["timeout"] / answered * 100, 1) if answered else 0,
             })
         # 按发言数降序（直观看工作量），其次首响数
         result.sort(key=lambda x: (-x["speak_count"], -x["answered_count"]))
@@ -212,11 +232,13 @@ class StaffPerformanceService:
         waits = [e["wait_min"] for e in answered]
         unanswered = [e for e in events if not e["answered"]]
         timeouts = [e for e in events if e["timeout"]]
+        perfunctory = [e for e in answered if e.get("perfunctory")]
         total_q = len(answered) + len(unanswered)
         return {
             "total_questions": total_q,
             "answered": len(answered),
             "unanswered": len(unanswered),
+            "perfunctory_count": len(perfunctory),
             "avg_first_response": round(statistics.mean(waits), 1) if waits else 0,
             "median_first_response": round(statistics.median(waits), 1) if waits else 0,
             "timeout_count": len(timeouts),

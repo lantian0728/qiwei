@@ -41,6 +41,10 @@
         <div class="stat-value">{{ ov.timeout_rate ?? 0 }}<small>%</small></div>
         <div class="stat-label">超时率</div>
       </div>
+      <div class="stat-card warn">
+        <div class="stat-value">{{ ov.perfunctory_count ?? 0 }}</div>
+        <div class="stat-label">敷衍首响(只回套话)</div>
+      </div>
     </div>
 
     <div class="cfg-tip" v-if="ov.config">
@@ -70,6 +74,11 @@
                 <span :class="{ slow: row.avg_first_response > (ov.config?.sla_minutes || 30) }">
                   {{ row.avg_first_response }}分
                 </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="敷衍率" width="90" align="center" sortable :sort-by="'perfunctory_rate'">
+              <template #default="{ row }">
+                <span :class="{ slow: row.perfunctory_rate > 30 }">{{ row.perfunctory_rate ?? 0 }}%</span>
               </template>
             </el-table-column>
             <el-table-column label="超时率" width="120" align="center">
@@ -197,7 +206,7 @@ onMounted(() => { loadAll(); loadNames() })
 .staff-names-bar { background:#fff; border-radius:12px; padding:12px 18px; margin-bottom:16px;
   box-shadow:0 1px 4px rgba(0,0,0,0.04); font-size:13px; color:#606266;
   display:flex; align-items:center; flex-wrap:wrap; gap:2px; }
-.stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.stat-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
 .stat-card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 .stat-card.warn .stat-value { color: #F56C6C; }
 .stat-value { font-size: 26px; font-weight: 700; }
