@@ -61,14 +61,16 @@ class CargoWatchService:
             for s in rows:
                 status = s.get("status", "")
                 issues, level = [], 2
-                if str(s.get("holdup", 0)) not in ("0", "", "None"):
+                # 已签收/取消的单已结束，不再报"进行中异常"(避免历史问题件刷屏)
+                active = status not in ("delivered", "cancelled", "returned")
+                if active and str(s.get("holdup", 0)) not in ("0", "", "None"):
                     issues.append("滞留"); level = 1
-                if str(s.get("is_problematic", 0)) not in ("0", "", "None"):
+                if active and str(s.get("is_problematic", 0)) not in ("0", "", "None"):
                     issues.append("问题件"); level = 1
                 if status == "returned":
                     issues.append("退件"); level = 1
                 eta = _parse_time(s.get("expected_arrived_time"))
-                if eta and eta < now and status not in ("delivered", "cancelled", "returned"):
+                if active and eta and eta < now:
                     issues.append(f"超预计到达{(now - eta).days}天")
                 created = _parse_time(s.get("created"))
                 if status == "ready" and created and (now - created).days >= overdue_ready_days:
