@@ -4,6 +4,9 @@
 
 仅服务器(Linux + SDK)可运行。游标(seq)存于 WxSystemConfig。
 """
+import sys
+import json
+import subprocess
 from datetime import datetime
 from typing import Dict, Any
 
@@ -14,6 +17,55 @@ from app.core.config import settings
 from app.models.models import WxMessage, WxGroup, WxGroupMember, WxSystemConfig
 
 SEQ_KEY = "wx_archive_seq"
+
+
+def _current_seq() -> int:
+    """读当前游标(独立 session)，用于 run_worker 判断进度。"""
+    from app.core.database import SessionLocal
+    db = SessionLocal()
+    try:
+        return ChatArchiveService(db)._get_seq()
+    finally:
+        db.close()
+
+
+def run_worker(mode: str = "sync", retries: int = 60, timeout: int = 900) -> Dict[str, Any]:
+    """在独立子进程执行 SDK 操作，隔离原生库的偶发 free() 崩溃。
+    子进程崩溃(非0退出/无RESULT)则从已落库游标续传重试；游标连续不前进判定坏数据并停。"""
+    if not wework_finance.is_available():
+        return {"available": False, "message": "未配置会话存档"}
+    crashes = 0
+    stuck = 0
+    last_err = "crashed"
+    for _ in range(retries):
+        before = _current_seq()
+        try:
+            p = subprocess.run(
+                [sys.executable, "-m", "app.services.archive_worker", mode],
+                capture_output=True, text=True, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            last_err = "worker 超时"
+            crashes += 1
+            continue
+        for line in (p.stdout or "").splitlines():
+            if line.startswith("RESULT "):
+                res = json.loads(line[len("RESULT "):])
+                res["crashes"] = crashes
+                return res
+        # 没有 RESULT = 子进程崩了
+        crashes += 1
+        errlines = (p.stderr or "").strip().splitlines()
+        last_err = errlines[-1][-150:] if errlines else "crashed"
+        after = _current_seq()
+        if after <= before:
+            stuck += 1
+            if stuck >= 3:
+                return {"available": True, "error": "worker 在同一位置反复崩溃(疑似坏数据)",
+                        "seq": after, "crashes": crashes, "detail": last_err}
+        else:
+            stuck = 0
+    return {"available": True, "error": "worker 崩溃次数达上限", "crashes": crashes, "detail": last_err}
 
 
 class ChatArchiveService:

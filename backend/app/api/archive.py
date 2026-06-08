@@ -26,15 +26,11 @@ async def archive_sync(
         return {"success": False, "message": "未配置会话存档(SDK/Secret/私钥)，仅服务器可用"}
 
     def do_sync():
-        db = SessionLocal()
-        try:
-            from app.services.chat_archive_service import ChatArchiveService
-            ChatArchiveService(db).sync()
-        finally:
-            db.close()
+        from app.services.chat_archive_service import run_worker
+        run_worker("sync")
 
     background_tasks.add_task(do_sync)
-    return {"success": True, "message": "会话存档同步已触发"}
+    return {"success": True, "message": "会话存档同步已触发(子进程隔离，崩溃自动续传)"}
 
 
 @router.post("/fast-forward", summary="快速跳过历史，游标顶到最新(贴新公钥后用一次)")
@@ -46,12 +42,8 @@ async def archive_fast_forward(
         return {"success": False, "message": "未配置会话存档"}
 
     def do_ff():
-        db = SessionLocal()
-        try:
-            from app.services.chat_archive_service import ChatArchiveService
-            ChatArchiveService(db).fast_forward()
-        finally:
-            db.close()
+        from app.services.chat_archive_service import run_worker
+        run_worker("ff")
 
     background_tasks.add_task(do_ff)
-    return {"success": True, "message": "已开始快速跳过历史，游标将顶到最新"}
+    return {"success": True, "message": "已开始快速跳过历史，游标将顶到最新(子进程隔离)"}
