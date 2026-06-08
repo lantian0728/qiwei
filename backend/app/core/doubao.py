@@ -50,6 +50,26 @@ async def chat(messages: List[Dict[str, str]], temperature: float = 0.3,
     raise RuntimeError(f"LLM限频重试失败: {last_err}")
 
 
+def parse_json_array(text: str) -> List[Any]:
+    """容错解析模型返回的 JSON 数组（去掉 ```json 包裹、截取方括号）。"""
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    try:
+        v = json.loads(text)
+        return v if isinstance(v, list) else []
+    except json.JSONDecodeError:
+        start, end = text.find("["), text.rfind("]")
+        if start != -1 and end != -1:
+            try:
+                v = json.loads(text[start:end + 1])
+                return v if isinstance(v, list) else []
+            except json.JSONDecodeError:
+                pass
+    return []
+
+
 def parse_json(text: str) -> Dict[str, Any]:
     """容错解析模型返回的 JSON（去掉 ```json 包裹、截取花括号）。"""
     if text.startswith("```"):

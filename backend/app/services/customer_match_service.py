@@ -68,11 +68,16 @@ class CustomerMatchService:
         return self._directory_cache
 
     # ---------- 匹配 ----------
-    async def _match_one(self, candidate: str, directory: List[Dict[str, str]]
-                         ) -> Tuple[Optional[Dict[str, str]], int]:
+    # 置信度阈值：difflib 高于此直接采用、低于下限直接判无；中间地带交给智谱批量精修
+    _AI_HIGH = 0.85   # ratio≥此：规则已很确定，不必问AI
+    _AI_LOW = 0.35    # ratio<此：基本不可能，不必问AI
+    _AI_BATCH = 60    # 每次智谱调用打包的群数量上限
+
+    def _difflib_top(self, candidate: str, directory: List[Dict[str, str]], n: int = 6
+                     ) -> List[Tuple[float, Dict[str, str]]]:
+        """difflib 粗筛，返回 top-n [(ratio, 客户)]。"""
         if not candidate or not directory:
-            return None, 0
-        # difflib 粗筛 top10
+            return []
         scored = []
         for d in directory:
             uname = d["username"] or ""
@@ -84,40 +89,46 @@ class CustomerMatchService:
                 ratio = difflib.SequenceMatcher(None, candidate, uname).ratio()
             scored.append((ratio, d))
         scored.sort(key=lambda x: -x[0])
-        if not scored:
-            return None, 0
-        top = scored[:10]
+        return scored[:n]
 
-        # 豆包在 top10 里语义选最优
-        if doubao.is_available() and len(top) > 1:
-            names = [d["username"] for _, d in top]
-            try:
-                text = await doubao.chat([
-                    {"role": "system", "content": "你是物流客户匹配助手，只返回JSON。"},
-                    {"role": "user", "content":
-                        f'群名提取出的客户候选："{candidate}"。\n候选客户名单：{names}\n'
-                        '从名单里选出最可能是同一客户的一个，返回 '
-                        '{"match":"客户名或空字符串","confidence":0到100整数}'},
-                ])
-                parsed = doubao.parse_json(text)
-                m = parsed.get("match")
-                if m:
-                    for _, d in top:
-                        if d["username"] == m:
-                            return d, int(parsed.get("confidence", 70))
-            except Exception:
-                pass
-
-        best_ratio, best = top[0]
-        return best, int(best_ratio * 100)
+    async def _ai_match_batch(self, items: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+        """批量精修：一次调用把多个群的候选名+可选客户打包给智谱，返回 {i: {match, confidence}}。
+        失败返回空 dict（调用方走 difflib 兜底）。"""
+        if not items:
+            return {}
+        payload_items = [
+            {"i": it["i"], "群名候选": it["candidate"], "可选客户": it["names"]}
+            for it in items
+        ]
+        try:
+            text = await doubao.chat([
+                {"role": "system", "content": "你是物流客户名称匹配助手，只返回JSON数组，不要解释。"},
+                {"role": "user", "content":
+                    "下面每条是一个微信群提取出的客户候选名，以及从客户库里粗筛出的可选客户名单。"
+                    "请为每条从它自己的『可选客户』里挑出最可能是同一客户的一个；"
+                    "若都不像则 match 用空字符串。confidence 是 0-100 的整数。\n"
+                    f"数据：{payload_items}\n"
+                    '严格返回数组：[{"i":序号,"match":"客户名或空","confidence":整数}, ...]'},
+            ], timeout=90)
+            parsed = doubao.parse_json_array(text)
+            out: Dict[int, Dict[str, Any]] = {}
+            for r in parsed:
+                if isinstance(r, dict) and "i" in r:
+                    out[int(r["i"])] = r
+            return out
+        except Exception:
+            return {}
 
     async def match_all(self, corp_id: str, only_unconfirmed: bool = True) -> Dict[str, Any]:
+        import asyncio
         directory = await self.build_directory()
         groups = self.db.query(WxGroup).filter(
             WxGroup.corp_id == corp_id, WxGroup.is_monitored == True
         ).all()
 
-        matched = 0
+        # 1) 全量 difflib 粗筛（秒级），同时挑出需要 AI 精修的「模糊地带」群
+        targets = []          # [{g, row, candidate, top}]
+        ai_pending = []       # [{i, candidate, names, idx}]  idx=targets下标
         for g in groups:
             row = self.db.query(WxGroupCustomer).filter(
                 WxGroupCustomer.corp_id == corp_id, WxGroupCustomer.chat_id == g.chat_id
@@ -125,7 +136,40 @@ class CustomerMatchService:
             if row and row.match_status == "confirmed" and only_unconfirmed:
                 continue
             candidate = extract_candidate_rule(g.group_name)
-            best, conf = await self._match_one(candidate, directory)
+            top = self._difflib_top(candidate, directory)
+            idx = len(targets)
+            targets.append({"g": g, "row": row, "candidate": candidate, "top": top})
+            if top and self._AI_LOW <= top[0][0] < self._AI_HIGH and len(top) > 1:
+                ai_pending.append({"i": idx, "candidate": candidate,
+                                   "names": [d["username"] for _, d in top]})
+
+        # 2) 模糊地带分批（每批60）一次性丢给智谱批量精修
+        ai_picks: Dict[int, Dict[str, Any]] = {}
+        ai_calls = 0
+        if doubao.is_available() and ai_pending:
+            for start in range(0, len(ai_pending), self._AI_BATCH):
+                batch = ai_pending[start:start + self._AI_BATCH]
+                res = await self._ai_match_batch(batch)
+                ai_calls += 1
+                ai_picks.update(res)
+                if start + self._AI_BATCH < len(ai_pending):
+                    await asyncio.sleep(1)  # 批间轻微间隔，避让限频
+
+        # 3) 落库：AI 命中优先，否则用 difflib top1
+        matched = 0
+        ai_used = 0
+        for idx, t in enumerate(targets):
+            g, row, candidate, top = t["g"], t["row"], t["candidate"], t["top"]
+            best, conf = (top[0][1], int(top[0][0] * 100)) if top else (None, 0)
+
+            pick = ai_picks.get(idx)
+            if pick and pick.get("match"):
+                for _, d in top:
+                    if d["username"] == pick["match"]:
+                        best = d
+                        conf = int(pick.get("confidence", 70))
+                        ai_used += 1
+                        break
 
             if not row:
                 row = WxGroupCustomer(corp_id=corp_id, chat_id=g.chat_id)
@@ -144,8 +188,9 @@ class CustomerMatchService:
                 row.confidence = conf
                 row.match_status = "none"
         self.db.commit()
-        return {"total_groups": len(groups), "matched": matched,
-                "directory_size": len(directory), "ai": doubao.is_available()}
+        return {"total_groups": len(targets), "matched": matched,
+                "directory_size": len(directory), "ai": doubao.is_available(),
+                "ai_used": ai_used, "ai_calls": ai_calls}
 
     def list_mappings(self, corp_id: str) -> List[Dict[str, Any]]:
         rows = self.db.query(WxGroupCustomer).filter(

@@ -157,8 +157,10 @@ const runMatch = async () => {
   matching.value = true
   try {
     const r: any = await trackingApi.matchRun()
-    ElMessage.success(`匹配完成：${r.matched}/${r.total_groups} 个群关联到客户（客户库 ${r.directory_size} 人${r.ai ? '，豆包辅助' : ''}）`)
+    ElMessage.success(`匹配完成：${r.matched}/${r.total_groups} 个群关联到客户（客户库 ${r.directory_size} 人${r.ai_used ? `，智谱精修 ${r.ai_used} 个` : ''}）`)
     await loadMappings()
+  } catch (e: any) {
+    ElMessage.error('匹配失败：' + (e?.response?.data?.detail || e?.message || '请稍后重试'))
   } finally { matching.value = false }
 }
 
