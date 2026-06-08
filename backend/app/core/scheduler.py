@@ -85,6 +85,24 @@ def ai_report_job():
         db.close()
 
 
+def cargo_watch_job():
+    """货物节点异常巡检：滞留/问题件/退件/超期/久未发货 → 预警进作战室。"""
+    from app.core import nextsls
+    if not nextsls.is_available():
+        return
+    from app.services.cargo_watch_service import CargoWatchService
+    corp = settings.WX_CORP_ID or settings.WX_ARCHIVE_CORPID
+    db = SessionLocal()
+    try:
+        r = asyncio.run(CargoWatchService(db).refresh_alerts(corp))
+        if r.get("problems"):
+            print(f"[cargo_watch] 货物异常 {r['problems']} 票")
+    except Exception as e:
+        print(f"[cargo_watch] 失败: {e}")
+    finally:
+        db.close()
+
+
 def tracking_watch_job():
     """轨迹变化巡检 + 群机器人推送。"""
     from app.services.push_service import run_tracking_push
@@ -112,6 +130,12 @@ def start_scheduler():
     # AI 日报(调智谱1QPS)：每 30 分钟，避免和高频同步撞限频
     scheduler.add_job(ai_report_job, "interval", minutes=30,
                       id="ai_report", replace_existing=True)
+    # 货物节点异常巡检：每 60 分钟拉 TMS 揪滞留/问题件/超期
+    scheduler.add_job(cargo_watch_job, "interval", minutes=60,
+                      id="cargo_watch", replace_existing=True)
+    scheduler.add_job(cargo_watch_job, "date",
+                      run_date=datetime.now() + timedelta(seconds=120),
+                      id="cargo_watch_startup", replace_existing=True)
     # 启动后：先同步消息(60s)，再跑 AI 日报(200s)
     scheduler.add_job(archive_sync_job, "date",
                       run_date=datetime.now() + timedelta(seconds=60),

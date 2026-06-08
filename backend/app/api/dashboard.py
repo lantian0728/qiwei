@@ -45,11 +45,11 @@ async def today_actions(
     # 2) 未读预警（沉默群 / 后续的流失、投诉预警都会进这里）
     alerts = db.query(WxAlert).filter(
         WxAlert.corp_id == cid, WxAlert.is_read == False,
-    ).order_by(WxAlert.created_at.desc()).limit(10).all()
+    ).order_by(WxAlert.created_at.desc()).limit(40).all()
     for a in alerts:
         actions.append({
             "level": "high" if a.alert_level == 1 else "medium" if a.alert_level == 2 else "low",
-            "type": {1: "沉默群", 2: "客户流失", 3: "投诉风险"}.get(a.alert_type, "预警"),
+            "type": {1: "沉默群", 2: "客户流失", 3: "投诉风险", 4: "货物异常"}.get(a.alert_type, "预警"),
             "group_name": a.group_name,
             "chat_id": a.chat_id,
             "text": a.content,

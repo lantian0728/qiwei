@@ -119,3 +119,13 @@ async def push_run(
     cid = _corp_id(current_user)
     from app.services.push_service import run_tracking_push
     return await run_tracking_push(db, cid)
+
+
+@router.post("/cargo/scan", summary="货物异常巡检(滞留/问题件/退件/超期/久未发货)")
+async def cargo_scan(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.cargo_watch_service import CargoWatchService
+    return await CargoWatchService(db).refresh_alerts(cid)
