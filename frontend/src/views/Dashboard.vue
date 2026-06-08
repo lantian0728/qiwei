@@ -36,18 +36,17 @@
             <el-icon class="ai-ico" :size="18"><MagicStick /></el-icon>
             <span>{{ aiBrief }}</span>
           </div>
-          <div class="ai-tip">提示：在群档案页点「智谱分析」可生成单群情绪与风险洞察；后续将自动每日推送全局情报。</div>
+          <div class="ai-tip">提示：到「客户与群」点进某个群，可看聊天记录并让智谱提炼当日重点。</div>
         </div>
       </el-col>
 
-      <!-- 右侧：健康分布 + 首响榜 -->
+      <!-- 右侧：客服首响榜 -->
       <el-col :span="10">
         <div class="panel">
-          <div class="panel-head"><span>群活跃度分布</span></div>
-          <div ref="pieRef" style="height:240px"></div>
-        </div>
-        <div class="panel" style="margin-top:16px">
-          <div class="panel-head"><span>客服首响榜(近7日)</span></div>
+          <div class="panel-head">
+            <span>客服首响榜(近7日)</span>
+            <el-link type="primary" :underline="false" @click="$router.push('/staff')">详情 →</el-link>
+          </div>
           <div v-for="(s, i) in topStaff" :key="s.userid" class="rank-row">
             <span class="rank-no" :class="{ top: i < 3 }">{{ i + 1 }}</span>
             <span class="rank-name">{{ s.name }}</span>
@@ -66,7 +65,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import * as echarts from 'echarts'
 import { groupApi, dashboardApi, staffApi, aiApi } from '@/api'
 
 const router = useRouter()
@@ -74,14 +72,13 @@ const overview = ref<any>({})
 const actions = ref<any[]>([])
 const topStaff = ref<any[]>([])
 const briefText = ref('')
-const pieRef = ref<HTMLElement>()
+const staffOv = ref<any>({})
 
 const cards = computed(() => [
   { label: '监测群数', value: overview.value.total_groups ?? 0, color: '#409EFF', icon: 'ChatLineSquare' },
-  { label: '群成员', value: overview.value.total_members ?? 0, color: '#67C23A', icon: 'User' },
   { label: '今日消息', value: overview.value.today_messages ?? 0, color: '#E6A23C', icon: 'ChatDotRound' },
-  { label: '今日活跃', value: overview.value.today_active_members ?? 0, color: '#9254DE', icon: 'TrendCharts' },
-  { label: '待处理', value: actions.value.length, color: '#F56C6C', icon: 'Warning' },
+  { label: '客服平均首响', value: (staffOv.value.avg_first_response ?? 0) + ' 分', color: '#67C23A', icon: 'Timer' },
+  { label: '今日待处理', value: actions.value.length, color: '#F56C6C', icon: 'Warning' },
 ])
 
 const aiBrief = computed(() => {
@@ -96,43 +93,23 @@ const aiBrief = computed(() => {
 
 const goGroup = (chatId: string) => { if (chatId) router.push(`/groups/${chatId}`) }
 
-const renderPie = () => {
-  if (!pieRef.value) return
-  const chart = echarts.init(pieRef.value)
-  const d = overview.value.level_distribution || {}
-  chart.setOption({
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0, icon: 'circle' },
-    series: [{
-      type: 'pie', radius: ['45%', '70%'],
-      label: { formatter: '{b}\n{c}' },
-      data: [
-        { value: d.high || 0, name: '高活跃', itemStyle: { color: '#67C23A' } },
-        { value: d.normal || 0, name: '正常', itemStyle: { color: '#409EFF' } },
-        { value: d.low || 0, name: '低活跃', itemStyle: { color: '#E6A23C' } },
-        { value: d.silent || 0, name: '沉默', itemStyle: { color: '#C0C4CC' } },
-      ],
-    }],
-  })
-  window.addEventListener('resize', () => chart.resize())
-}
-
 onMounted(async () => {
-  overview.value = await groupApi.overview()
-  const ta: any = await dashboardApi.todayActions()
-  actions.value = ta.actions || []
-  const rank: any = await staffApi.ranking()
-  topStaff.value = (rank || []).slice(0, 5)
+  const [ov, ta, rank, sov] = await Promise.all([
+    groupApi.overview(), dashboardApi.todayActions(), staffApi.ranking(), staffApi.overview(),
+  ])
+  overview.value = ov
+  actions.value = (ta as any).actions || []
+  topStaff.value = ((rank as any) || []).slice(0, 5)
+  staffOv.value = sov
   try {
     const b: any = await aiApi.brief()
     if (b && b.brief) briefText.value = b.brief
   } catch {}
-  renderPie()
 })
 </script>
 
 <style scoped>
-.stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .stat-card {
   background: #fff; border-radius: 12px; padding: 18px; display: flex; align-items: center; gap: 14px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
