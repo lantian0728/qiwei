@@ -246,9 +246,11 @@ const renderHour = () => {
 onMounted(async () => {
   loading.value = true
   try {
-    group.value = await groupApi.detail(chatId)
-    stats.value = await groupApi.stats(chatId, {})
-    await loadMessages()
+    const [g, s] = await Promise.all([
+      groupApi.detail(chatId), groupApi.stats(chatId, {}), loadMessages(),
+    ])
+    group.value = g
+    stats.value = s
     await nextTick()
     renderTrend()
     renderHour()

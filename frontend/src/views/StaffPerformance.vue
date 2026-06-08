@@ -138,9 +138,12 @@ const renderBar = () => {
 onMounted(async () => {
   loading.value = true
   try {
-    ov.value = await staffApi.overview()
-    ranking.value = (await staffApi.ranking()) as any
-    timeouts.value = (await staffApi.timeouts()) as any
+    const [o, r, t] = await Promise.all([
+      staffApi.overview(), staffApi.ranking(), staffApi.timeouts(),
+    ])
+    ov.value = o
+    ranking.value = r as any
+    timeouts.value = t as any
     await nextTick()
     renderBar()
   } finally {

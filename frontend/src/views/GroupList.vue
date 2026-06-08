@@ -69,7 +69,8 @@
 
       <div style="display:flex;justify-content:flex-end;margin-top:16px">
         <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total"
-                       layout="total, prev, pager, next" @change="load" />
+                       :pager-count="7" background
+                       layout="total, prev, pager, next, jumper" @current-change="load" />
       </div>
     </el-card>
   </div>
