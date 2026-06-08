@@ -222,6 +222,28 @@ class WxGroupDailySummary(Base):
     )
 
 
+class WxGroupCustomer(Base):
+    """群 ↔ 新智慧客户 映射（豆包/规则识别群名得到的客户，用于查件）"""
+    __tablename__ = "wx_group_customer"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    corp_id = Column(String(64), index=True, nullable=False)
+    chat_id = Column(String(128), nullable=False)
+    group_name = Column(String(256), default="")
+
+    user_number = Column(String(64), default="", comment="NextSLS 客户编号")
+    customer_name = Column(String(128), default="", comment="NextSLS 客户名")
+    company = Column(String(256), default="")
+    candidate = Column(String(128), default="", comment="从群名识别出的候选名")
+    confidence = Column(Integer, default=0, comment="匹配置信度 0-100")
+    match_status = Column(String(16), default="none", comment="none/auto/confirmed")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("corp_id", "chat_id", name="uq_groupcustomer_corp_chat"),
+    )
+
+
 class WxSystemConfig(Base):
     """系统参数（键值对，按企业隔离）"""
     __tablename__ = "wx_system_config"

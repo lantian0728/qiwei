@@ -61,6 +61,16 @@ export const churnApi = {
   scan: () => request.post('/churn/scan'),
 }
 
+// ========== 查件 + 客户匹配(新智慧NextSLS) ==========
+export const trackingApi = {
+  status: () => request.get('/tracking/status'),
+  byNumber: (number: string) => request.get('/tracking/by-number', { params: { number } }),
+  byGroup: (chat_id: string, limit = 10) => request.get('/tracking/by-group', { params: { chat_id, limit } }),
+  matchRun: () => request.post('/tracking/match/run'),
+  matchList: () => request.get('/tracking/match/list'),
+  matchSet: (data: any) => request.post('/tracking/match/set', data),
+}
+
 // ========== 预警 ==========
 export const alertApi = {
   list: (params: any) => request.get('/alerts', { params }),

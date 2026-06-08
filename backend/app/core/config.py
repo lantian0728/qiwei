@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
     DOUBAO_MODEL: str = "doubao-pro-32k"  # 填你在方舟创建的推理接入点ID或模型名
 
+    # 新智慧 NextSLS TMS MPAPI —— 用于查件/运单/客户
+    NEXTSLS_TOKEN: str = ""
+    NEXTSLS_BASE_URL: str = "https://zjyxgj.nextsls.com/mpapi/v5"
+
     @property
     def cors_origin_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
