@@ -106,6 +106,24 @@ class ChatArchiveService:
     def __init__(self, db: Session):
         self.db = db
         self.corp_id = settings.WX_ARCHIVE_CORPID or settings.WX_CORP_ID
+        self._ent_cache = None
+
+    def _enterprise_userids(self) -> set:
+        """本企业全部『企业成员』(非外部客户)的 userid 集合，带缓存。"""
+        if self._ent_cache is None:
+            self._ent_cache = {
+                r[0] for r in self.db.query(WxGroupMember.userid).filter(
+                    WxGroupMember.corp_id == self.corp_id,
+                    WxGroupMember.member_type == 1,
+                ).distinct().all()
+            }
+        return self._ent_cache
+
+    def _is_staff(self, sender: str) -> bool:
+        """是不是客服(企业员工)。企微外部客户 external_userid 以 wm 开头，企业员工 userid 不会。"""
+        if not sender or sender.startswith("wm"):
+            return False
+        return sender in self._enterprise_userids()
 
     def _get_seq(self) -> int:
         row = self.db.query(WxSystemConfig).filter(
@@ -270,7 +288,7 @@ class ChatArchiveService:
             if roomid not in member_cache:
                 member_cache[roomid] = self._staff_ids(roomid)
             members = member_cache[roomid]
-            is_staff = sender in members
+            is_staff = self._is_staff(sender)
             sender_name = members.get(sender, sender)
             mtype = msg.get("msgtype", "") or "text"
             content = msg.get("content", "") or (f"[{mtype}]" if mtype != "text" else "")
