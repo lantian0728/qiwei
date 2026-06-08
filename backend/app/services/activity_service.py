@@ -7,7 +7,7 @@
 from datetime import date, datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
 from app.models.models import (
@@ -158,6 +158,56 @@ class ActivityLevelService:
             self.recompute_group_score(g, thresholds)
         self.db.commit()
         return len(groups)
+
+    def recompute_daily_stats(self, corp_id: str, day: Optional[date] = None) -> int:
+        """从 WxMessage 聚合当天每群统计，写入 WxGroupDailyStat（驾驶舱/活跃度依赖此表）。"""
+        day = day or date.today()
+        start_dt = datetime.combine(day, datetime.min.time())
+        end_dt = datetime.combine(day, datetime.max.time())
+        rows = self.db.query(
+            WxMessage.chat_id,
+            func.count(WxMessage.id).label("msgs"),
+            func.count(func.distinct(WxMessage.sender_userid)).label("actives"),
+            func.sum(case((WxMessage.sender_type == 1, 1), else_=0)).label("staff"),
+            func.sum(case((WxMessage.sender_type == 2, 1), else_=0)).label("cust"),
+            func.max(WxMessage.send_time).label("last"),
+        ).filter(
+            WxMessage.corp_id == corp_id,
+            WxMessage.send_time >= start_dt,
+            WxMessage.send_time <= end_dt,
+        ).group_by(WxMessage.chat_id).all()
+
+        n = 0
+        for r in rows:
+            staff = int(r.staff or 0)
+            cust = int(r.cust or 0)
+            reply = min(staff / cust, 1.0) if cust else (1.0 if staff else 0.0)
+            stat = self.db.query(WxGroupDailyStat).filter(
+                WxGroupDailyStat.corp_id == corp_id,
+                WxGroupDailyStat.chat_id == r.chat_id,
+                WxGroupDailyStat.stat_date == day,
+            ).first()
+            if not stat:
+                stat = WxGroupDailyStat(corp_id=corp_id, chat_id=r.chat_id, stat_date=day)
+                self.db.add(stat)
+            stat.total_msg_count = int(r.msgs or 0)
+            stat.active_member_count = int(r.actives or 0)
+            stat.reply_rate = round(reply, 4)
+            # 顺带更新群的最近消息时间（活跃度沉默惩罚要用）
+            g = self.db.query(WxGroup).filter(
+                WxGroup.corp_id == corp_id, WxGroup.chat_id == r.chat_id
+            ).first()
+            if g and r.last and (not g.last_msg_time or r.last > g.last_msg_time):
+                g.last_msg_time = r.last
+            n += 1
+        self.db.commit()
+        return n
+
+    def recompute(self, corp_id: str, day: Optional[date] = None) -> Dict[str, int]:
+        """一站式：先把消息聚合成当天统计，再据近7天统计重算各群活跃度等级。"""
+        stat_groups = self.recompute_daily_stats(corp_id, day)
+        scored = self.recompute_all(corp_id)
+        return {"stat_groups": stat_groups, "scored_groups": scored}
 
 
 class StatisticsService:

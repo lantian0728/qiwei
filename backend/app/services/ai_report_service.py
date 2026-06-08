@@ -176,10 +176,28 @@ class AIReportService:
             n += 1
         return {"generated": n, "date": str(day), "ai": doubao.is_available()}
 
+    async def generate_active(self, corp_id: str, day: date = None) -> Dict[str, Any]:
+        """只对当天有消息的群生成日报（增量同步后调用，避免全量上千群空跑）。"""
+        day = day or date.today()
+        start_dt = datetime.combine(day, datetime.min.time())
+        chat_ids = [r[0] for r in self.db.query(WxMessage.chat_id).filter(
+            WxMessage.corp_id == corp_id,
+            WxMessage.send_time >= start_dt,
+        ).distinct().all()]
+        n = 0
+        for cid in chat_ids:
+            g = self.db.query(WxGroup).filter(
+                WxGroup.corp_id == corp_id, WxGroup.chat_id == cid
+            ).first()
+            await self.generate_group_daily(corp_id, cid, g.group_name if g else cid, day)
+            n += 1
+        return {"generated": n, "active_only": True, "date": str(day)}
+
     def get_summaries(self, corp_id: str, day: date) -> List[Dict[str, Any]]:
         rows = self.db.query(WxGroupDailySummary).filter(
             WxGroupDailySummary.corp_id == corp_id,
             WxGroupDailySummary.summary_date == day,
+            WxGroupDailySummary.msg_count > 0,
         ).all()
         risk_order = {"high": 0, "medium": 1, "low": 2, "none": 3}
         rows.sort(key=lambda r: (risk_order.get(r.risk, 9), -r.msg_count))
@@ -200,6 +218,7 @@ class AIReportService:
         rows = self.db.query(WxGroupDailySummary).filter(
             WxGroupDailySummary.corp_id == corp_id,
             WxGroupDailySummary.summary_date == day,
+            WxGroupDailySummary.msg_count > 0,
         ).all()
         if not rows:
             return {"has_report": False,

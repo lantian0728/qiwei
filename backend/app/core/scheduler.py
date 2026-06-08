@@ -40,17 +40,33 @@ def auto_analysis_job():
 
 
 def archive_sync_job():
-    """会话存档增量同步：子进程隔离拉新消息→解密→入库。游标续传，每次只拉新增。"""
+    """会话存档增量同步 + 同步后自动重算派生数据（统计/活跃度/日报/流失全靠它）。"""
     from app.core import wework_finance
     if not wework_finance.is_available():
         return
     from app.services.chat_archive_service import run_worker
     try:
         r = run_worker("sync")
-        if r.get("stored"):
-            print(f"[archive_sync] 入库 {r['stored']} 条，seq={r.get('seq')}")
     except Exception as e:
-        print(f"[archive_sync] 失败: {e}")
+        print(f"[archive_sync] 同步失败: {e}")
+        return
+    if not r.get("stored"):
+        return
+    corp = settings.WX_ARCHIVE_CORPID or settings.WX_CORP_ID
+    today = date.today()
+    db = SessionLocal()
+    try:
+        from app.services.activity_service import ActivityLevelService
+        from app.services.ai_report_service import AIReportService
+        from app.services.churn_service import ChurnService
+        ActivityLevelService(db).recompute(corp, today)        # 顶部卡片+活跃度饼图
+        asyncio.run(AIReportService(db).generate_active(corp, today))  # 活跃群AI日报
+        ChurnService(db).generate_alerts(corp)                 # 流失预警
+        print(f"[archive_sync] 入库 {r['stored']} 条并已重算统计/日报")
+    except Exception as e:
+        print(f"[archive_sync] 重算失败: {e}")
+    finally:
+        db.close()
 
 
 def tracking_watch_job():
