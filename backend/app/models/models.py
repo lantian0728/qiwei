@@ -198,6 +198,30 @@ class WxSyncLog(Base):
     finished_at = Column(DateTime, nullable=True)
 
 
+class WxGroupDailySummary(Base):
+    """群每日 AI 日报（一句话摘要 + 情绪 + 风险 + 关键词）"""
+    __tablename__ = "wx_group_daily_summary"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    corp_id = Column(String(64), index=True, nullable=False)
+    chat_id = Column(String(128), index=True, nullable=False)
+    group_name = Column(String(256), default="")
+    summary_date = Column(Date, index=True, nullable=False)
+
+    summary = Column(String(512), default="")
+    sentiment = Column(String(16), default="neutral", comment="positive/neutral/negative")
+    sentiment_score = Column(Integer, default=50)
+    risk = Column(String(16), default="none", comment="none/low/medium/high")
+    keywords = Column(String(256), default="", comment="逗号分隔")
+    msg_count = Column(Integer, default=0)
+    generated_by = Column(String(16), default="rule", comment="ai/rule")
+    generated_at = Column(DateTime, default=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("corp_id", "chat_id", "summary_date", name="uq_summary_corp_chat_date"),
+    )
+
+
 class WxSystemConfig(Base):
     """系统参数（键值对，按企业隔离）"""
     __tablename__ = "wx_system_config"

@@ -9,6 +9,9 @@ const routes = [
     children: [
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/Dashboard.vue'), meta: { title: '经营驾驶舱' } },
       { path: 'staff', name: 'staff', component: () => import('@/views/StaffPerformance.vue'), meta: { title: '客服效能' } },
+      { path: 'ai-report', name: 'ai-report', component: () => import('@/views/AIReport.vue'), meta: { title: 'AI群日报' } },
+      { path: 'churn', name: 'churn', component: () => import('@/views/ChurnHealth.vue'), meta: { title: '客户健康度' } },
+      { path: 'risk', name: 'risk', component: () => import('@/views/RiskRadar.vue'), meta: { title: '投诉雷达' } },
       { path: 'groups', name: 'groups', component: () => import('@/views/GroupList.vue'), meta: { title: '群档案' } },
       { path: 'groups/:chatId', name: 'group-detail', component: () => import('@/views/GroupDetail.vue'), meta: { title: '群详情' } },
       { path: 'alerts', name: 'alerts', component: () => import('@/views/Alerts.vue'), meta: { title: '预警管理' } },

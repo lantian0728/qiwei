@@ -11,7 +11,7 @@ from app.models.models import WxAlert
 
 router = APIRouter(prefix="/alerts", tags=["预警"])
 
-ALERT_TYPE_NAMES = {1: "沉默群", 2: "活跃度下降", 3: "其他"}
+ALERT_TYPE_NAMES = {1: "沉默群", 2: "客户流失", 3: "投诉风险"}
 ALERT_LEVEL_NAMES = {1: "严重", 2: "警告", 3: "提示"}
 
 

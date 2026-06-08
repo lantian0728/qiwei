@@ -48,6 +48,19 @@ export const dashboardApi = {
   todayActions: () => request.get('/dashboard/today-actions'),
 }
 
+// ========== AI 群日报 ==========
+export const aiApi = {
+  run: (params: any = {}) => request.post('/ai/daily-report/run', null, { params }),
+  summaries: (params: any = {}) => request.get('/ai/summaries', { params }),
+  brief: (params: any = {}) => request.get('/ai/brief', { params }),
+}
+
+// ========== 客户流失预警 ==========
+export const churnApi = {
+  list: () => request.get('/churn/list'),
+  scan: () => request.post('/churn/scan'),
+}
+
 // ========== 预警 ==========
 export const alertApi = {
   list: (params: any) => request.get('/alerts', { params }),

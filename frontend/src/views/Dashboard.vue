@@ -67,12 +67,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { groupApi, dashboardApi, staffApi } from '@/api'
+import { groupApi, dashboardApi, staffApi, aiApi } from '@/api'
 
 const router = useRouter()
 const overview = ref<any>({})
 const actions = ref<any[]>([])
 const topStaff = ref<any[]>([])
+const briefText = ref('')
 const pieRef = ref<HTMLElement>()
 
 const cards = computed(() => [
@@ -84,6 +85,7 @@ const cards = computed(() => [
 ])
 
 const aiBrief = computed(() => {
+  if (briefText.value) return briefText.value
   const ov = overview.value
   if (!ov.total_groups) return '暂无数据，点右上角「同步数据」生成。'
   const d = ov.level_distribution || {}
@@ -121,6 +123,10 @@ onMounted(async () => {
   actions.value = ta.actions || []
   const rank: any = await staffApi.ranking()
   topStaff.value = (rank || []).slice(0, 5)
+  try {
+    const b: any = await aiApi.brief()
+    if (b && b.brief) briefText.value = b.brief
+  } catch {}
   renderPie()
 })
 </script>

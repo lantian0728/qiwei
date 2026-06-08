@@ -49,7 +49,7 @@ async def today_actions(
     for a in alerts:
         actions.append({
             "level": "high" if a.alert_level == 1 else "medium" if a.alert_level == 2 else "low",
-            "type": {1: "沉默群", 2: "活跃度下降", 3: "风险"}.get(a.alert_type, "预警"),
+            "type": {1: "沉默群", 2: "客户流失", 3: "投诉风险"}.get(a.alert_type, "预警"),
             "group_name": a.group_name,
             "chat_id": a.chat_id,
             "text": a.content,

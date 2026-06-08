@@ -195,11 +195,16 @@ class MockDataService:
 
             # 近 14 天消息 + 日统计
             activity_base = rnd.choice([0.05, 0.3, 0.6, 0.9])  # 决定群冷热
+            risk_prone = (idx % 4 == 1)  # 约 1/4 群为"问题客户"，集中产生风险/流失信号
             last_msg_time = None
             for d in range(14):
                 day = (now - timedelta(days=13 - d)).date()
-                questions = max(0, int(rnd.gauss(activity_base * 16, 3)))
-                day_msgs = self._gen_day_messages(chat_id, day, questions, rnd)
+                # 问题群近一周货量下滑，制造"流失/降温"信号
+                base_factor = activity_base
+                if risk_prone and d >= 7:
+                    base_factor = activity_base * 0.4
+                questions = max(0, int(rnd.gauss(base_factor * 16, 3)))
+                day_msgs = self._gen_day_messages(chat_id, day, questions, rnd, risk_prone)
                 msg_count = len(day_msgs)
                 if day_msgs:
                     last_msg_time = max(m.send_time for m in day_msgs)
@@ -235,23 +240,38 @@ class MockDataService:
 
         return {"skipped": False, "groups": group_count}
 
-    # 货代场景话术（让客服效能/情绪分析有真实文本可分析）
-    CUSTOMER_QUESTIONS = [
-        "我的货到哪了？", "深圳到洛杉矶现在什么价？", "这周还有舱吗？能不能加塞",
-        "怎么还没派送啊，客户催得急", "被海关查验了怎么办？", "账单是不是多收了？",
-        "别家报价更低，能不能再降点", "截单时间是几点？", "这批走美森还是以星？",
-        "FBA 入仓预约好了吗", "提单什么时候出", "清关需要补什么资料",
+    # 货代场景话术：大部分为常规咨询，少数为风险话术（仅风险群高频出现）
+    NEUTRAL_QUESTIONS = [
+        "我的货到哪了？", "深圳到洛杉矶现在什么价？", "这周还有舱吗？",
+        "截单时间是几点？", "这批走美森还是以星？", "FBA 入仓预约好了吗",
+        "提单什么时候出", "清关需要补什么资料", "下周的舱位帮我留两个",
+        "这票预计几天到", "可以走卡派吗",
     ]
+    RISKY_QUESTIONS = [
+        "怎么还没派送啊，客户催得急", "被海关查验扣货了怎么办？", "账单是不是多收了？",
+        "别家报价更低，再不降我换一家了", "延误这么久，我要投诉", "货丢了你们怎么赔",
+        "太慢了，这批不做了",
+    ]
+    # 兼容旧引用
+    CUSTOMER_QUESTIONS = NEUTRAL_QUESTIONS
     STAFF_REPLIES = [
         "您好，马上帮您查一下轨迹", "稍等，这边核实后回复您", "今天 18 点前截单哦",
         "已经在派送途中，预计明天到", "查验是常规抽查，我们盯着，别担心", "账单我让财务复核下",
         "价格已经是优惠价了，量大可以再谈", "提单今天会出，出了发您",
     ]
 
-    def _gen_day_messages(self, chat_id: str, day: date, questions: int, rnd: random.Random):
-        """以"客户提问→客服回复"为单位生成真实对话，含合理首响时延与少量超时。"""
+    def _gen_day_messages(self, chat_id: str, day: date, questions: int,
+                          rnd: random.Random, risk_prone: bool = False):
+        """以"客户提问→客服回复"为单位生成真实对话，含合理首响时延与少量超时。
+        risk_prone=True 的群更高频出现风险话术(模拟个别问题客户)。"""
         msgs = []
         base = datetime.combine(day, datetime.min.time())
+        risky_p = 0.35 if risk_prone else 0.04
+
+        def pick_question():
+            if rnd.random() < risky_p:
+                return rnd.choice(self.RISKY_QUESTIONS)
+            return rnd.choice(self.NEUTRAL_QUESTIONS)
 
         def add(sid, sname, stype, send_time, content, is_at=False):
             m = WxMessage(
@@ -270,7 +290,7 @@ class MockDataService:
             )[0]
             ctime = base + timedelta(hours=hour, minutes=rnd.randint(0, 59), seconds=rnd.randint(0, 59))
             cust = rnd.choice(self.CUSTOMERS)
-            add(cust[0], cust[1], 2, ctime, rnd.choice(self.CUSTOMER_QUESTIONS), is_at=(rnd.random() < 0.2))
+            add(cust[0], cust[1], 2, ctime, pick_question(), is_at=(rnd.random() < 0.2))
 
             # 工作时间内 94% 会被回复；其中约 12% 是超时回复
             if 9 <= hour < 21 and rnd.random() < 0.94:

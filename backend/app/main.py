@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base, engine, SessionLocal
 from app.models import models  # noqa: F401  确保模型被注册
-from app.api import auth, groups, admin, alerts, staff, dashboard
+from app.api import auth, groups, admin, alerts, staff, dashboard, ai, churn
 
 
 @asynccontextmanager
@@ -19,9 +19,16 @@ async def lifespan(app: FastAPI):
     # 演示模式：首次启动自动生成演示数据
     if settings.DEMO_MODE:
         from app.services.sync_service import MockDataService
+        from app.services.ai_report_service import AIReportService
+        from datetime import date
         db = SessionLocal()
         try:
-            MockDataService(db, "demo_corp").generate_demo_data()
+            result = MockDataService(db, "demo_corp").generate_demo_data()
+            # 首次生成演示数据后，顺带产出今日 AI 日报（规则版，配了豆包则为 AI 版）
+            if not result.get("skipped"):
+                await AIReportService(db).generate_all("demo_corp", date.today())
+                from app.services.churn_service import ChurnService
+                ChurnService(db).generate_alerts("demo_corp")
         finally:
             db.close()
     yield
@@ -49,6 +56,8 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(staff.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
+app.include_router(churn.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["系统"], summary="健康检查")
