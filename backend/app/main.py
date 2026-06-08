@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base, engine, SessionLocal
 from app.models import models  # noqa: F401  确保模型被注册
-from app.api import auth, groups, admin, alerts, staff, dashboard, ai, churn, tracking
+from app.api import auth, groups, admin, alerts, staff, dashboard, ai, churn, tracking, archive
 
 
 @asynccontextmanager
@@ -59,6 +59,7 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(churn.router, prefix="/api")
 app.include_router(tracking.router, prefix="/api")
+app.include_router(archive.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["系统"], summary="健康检查")

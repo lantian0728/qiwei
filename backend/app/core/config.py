@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     NEXTSLS_TOKEN: str = ""
     NEXTSLS_BASE_URL: str = "https://zjyxgj.nextsls.com/mpapi/v5"
 
+    # 企业微信「会话内容存档」(仅服务器Linux + 原生SDK可用)
+    WX_ARCHIVE_CORPID: str = ""          # 留空则用 WX_CORP_ID
+    WX_ARCHIVE_SECRET: str = ""          # 会话存档专用 Secret
+    WX_ARCHIVE_SDK_PATH: str = ""        # libWeWorkFinanceSdk_C.so 绝对路径
+    WX_ARCHIVE_PRIVATE_KEY_PATH: str = ""  # RSA 私钥 PEM 文件路径(公钥已传企微后台)
+
     @property
     def cors_origin_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
