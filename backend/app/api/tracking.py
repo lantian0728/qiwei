@@ -129,3 +129,14 @@ async def cargo_scan(
     cid = _corp_id(current_user)
     from app.services.cargo_watch_service import CargoWatchService
     return await CargoWatchService(db).refresh_alerts(cid)
+
+
+@router.get("/customer-business", summary="客户业务量看板(单量/货量/金额,本期vs上期掉量)")
+async def customer_business(
+    days: int = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.customer_business_service import CustomerBusinessService
+    return await CustomerBusinessService(db).ranking(cid, days=days)
