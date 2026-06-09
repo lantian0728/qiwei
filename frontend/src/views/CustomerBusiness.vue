@@ -47,6 +47,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { trackingApi } from '@/api'
 import { startTask } from '@/utils/loading'
 
@@ -62,6 +63,9 @@ const load = async () => {
     const r: any = await trackingApi.customerBusiness(days.value)
     customers.value = r.customers || []
     dropping.value = r.dropping || []
+    ElMessage.success(`已加载 ${customers.value.length} 个客户`)
+  } catch (e: any) {
+    ElMessage.error('加载失败：' + (e?.response?.data?.detail || e?.message || '稍后重试'))
   } finally {
     loading.value = false
     t.close()
