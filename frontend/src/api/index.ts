@@ -74,6 +74,7 @@ export const trackingApi = {
   status: () => request.get('/tracking/status'),
   byNumber: (number: string) => request.get('/tracking/by-number', { params: { number } }),
   byGroup: (chat_id: string, limit = 10) => request.get('/tracking/by-group', { params: { chat_id, limit } }),
+  customerBusiness: (days = 30) => request.get('/tracking/customer-business', { params: { days }, timeout: 120000 }),
   matchRun: () => request.post('/tracking/match/run', {}, { timeout: 180000 }),
   matchList: () => request.get('/tracking/match/list'),
   matchSet: (data: any) => request.post('/tracking/match/set', data),
