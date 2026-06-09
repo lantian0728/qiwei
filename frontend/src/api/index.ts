@@ -54,6 +54,7 @@ export const staffApi = {
 // ========== 驾驶舱 ==========
 export const dashboardApi = {
   todayActions: () => request.get('/dashboard/today-actions'),
+  systemHealth: () => request.get('/dashboard/system-health'),
 }
 
 // ========== AI 群日报 ==========

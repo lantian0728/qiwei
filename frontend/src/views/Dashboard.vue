@@ -1,5 +1,13 @@
 <template>
   <div class="dashboard">
+    <div class="sys-health" :class="health.overall || 'ok'">
+      <span class="dot"></span>
+      <b>系统状态：{{ healthText }}</b>
+      <span v-for="i in (health.items || [])" :key="i.key" class="hi" :class="i.level">
+        {{ i.name }}<em v-if="i.level !== 'ok'"> · {{ i.detail }}</em>
+      </span>
+    </div>
+
     <!-- 指标条 -->
     <div class="stat-row">
       <div class="stat-card" v-for="c in cards" :key="c.label">
@@ -73,6 +81,11 @@ const actions = ref<any[]>([])
 const topStaff = ref<any[]>([])
 const briefText = ref('')
 const staffOv = ref<any>({})
+const health = ref<any>({})
+const healthText = computed(() => {
+  const o = health.value.overall
+  return o === 'ok' ? '全部正常' : o === 'warn' ? '有警告，请关注' : o === 'error' ? '有异常，需处理' : '检测中'
+})
 
 const cards = computed(() => [
   { label: '监测群数', value: overview.value.total_groups ?? 0, color: '#409EFF', icon: 'ChatLineSquare' },
@@ -94,13 +107,15 @@ const aiBrief = computed(() => {
 const goGroup = (chatId: string) => { if (chatId) router.push(`/groups/${chatId}`) }
 
 onMounted(async () => {
-  const [ov, ta, rank, sov] = await Promise.all([
+  const [ov, ta, rank, sov, h] = await Promise.all([
     groupApi.overview(), dashboardApi.todayActions(), staffApi.ranking(), staffApi.overview(),
+    dashboardApi.systemHealth(),
   ])
   overview.value = ov
   actions.value = (ta as any).actions || []
   topStaff.value = ((rank as any) || []).slice(0, 5)
   staffOv.value = sov
+  health.value = h
   try {
     const b: any = await aiApi.brief()
     if (b && b.brief) briefText.value = b.brief
@@ -109,6 +124,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.sys-health { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: #fff;
+  border-radius: 10px; padding: 10px 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); font-size: 13px; }
+.sys-health .dot { width: 9px; height: 9px; border-radius: 50%; }
+.sys-health.ok .dot { background: #67C23A; box-shadow: 0 0 0 3px #67c23a22; }
+.sys-health.warn .dot { background: #E6A23C; box-shadow: 0 0 0 3px #e6a23c22; }
+.sys-health.error .dot { background: #F56C6C; box-shadow: 0 0 0 3px #f56c6c22; }
+.sys-health .hi { color: #67C23A; }
+.sys-health .hi.warn { color: #E6A23C; }
+.sys-health .hi.error { color: #F56C6C; }
+.sys-health .hi em { color: #909399; font-style: normal; }
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .stat-card {
   background: #fff; border-radius: 12px; padding: 18px; display: flex; align-items: center; gap: 14px;

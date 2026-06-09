@@ -74,3 +74,13 @@ async def today_actions(
     order = {"high": 0, "medium": 1, "low": 2}
     actions.sort(key=lambda x: order.get(x["level"], 9))
     return {"total": len(actions), "actions": actions}
+
+
+@router.get("/system-health", summary="系统健康自监控(存档/AI/TMS)")
+async def system_health(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.system_health_service import SystemHealthService
+    return SystemHealthService(db).check(cid)
