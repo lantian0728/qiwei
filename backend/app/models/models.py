@@ -225,6 +225,19 @@ class WxGroupDailySummary(Base):
     )
 
 
+class WxWarehouseBooking(Base):
+    """亚马逊各仓预约情况(每周从公众号/元宝总结录入，用于预计 DW)"""
+    __tablename__ = "wx_warehouse_booking"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    corp_id = Column(String(64), index=True, nullable=False)
+    warehouse_code = Column(String(32), index=True, nullable=False)
+    delay_days = Column(Integer, default=0, comment="预约推迟天数(推迟N周→N*7)")
+    status = Column(String(32), default="", comment="推迟/不批约/关单/转仓/爆仓")
+    week_label = Column(String(32), default="", comment="数据周次,如 2026.06.06")
+    updated_at = Column(DateTime, default=datetime.now)
+
+
 class WxGroupCustomer(Base):
     """群 ↔ 新智慧客户 映射（豆包/规则识别群名得到的客户，用于查件）"""
     __tablename__ = "wx_group_customer"

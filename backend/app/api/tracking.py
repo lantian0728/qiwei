@@ -150,3 +150,29 @@ async def fulfillment(
     cid = _corp_id(current_user)
     from app.services.fulfillment_service import FulfillmentService
     return await FulfillmentService(db).forecast(cid)
+
+
+class WarehouseTextReq(BaseModel):
+    text: str
+    week_label: str = ""
+
+
+@router.post("/warehouse/update", summary="粘贴公众号总结→AI解析各仓预约推迟(DW数据)")
+async def warehouse_update(
+    req: WarehouseTextReq,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.warehouse_booking_service import WarehouseBookingService
+    return await WarehouseBookingService(db).parse_and_save(cid, req.text, req.week_label)
+
+
+@router.get("/warehouse/list", summary="各仓预约情况列表")
+async def warehouse_list(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.warehouse_booking_service import WarehouseBookingService
+    return WarehouseBookingService(db).list_all(cid)

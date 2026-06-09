@@ -12,6 +12,7 @@
         <el-menu-item index="/customer-business"><el-icon><Money /></el-icon><span>客户业务</span></el-menu-item>
         <el-menu-item index="/staff"><el-icon><Avatar /></el-icon><span>客服效能</span></el-menu-item>
         <el-menu-item index="/tracking"><el-icon><Search /></el-icon><span>查件</span></el-menu-item>
+        <el-menu-item index="/warehouse-dw"><el-icon><Calendar /></el-icon><span>仓库预约/DW</span></el-menu-item>
         <el-menu-item index="/admin"><el-icon><Setting /></el-icon><span>配置</span></el-menu-item>
       </el-menu>
     </el-aside>
