@@ -60,6 +60,26 @@ class WarehouseBookingService:
         self.db.commit()
         return {"saved": len(saved), "warehouses": saved}
 
+    def save_records(self, corp_id: str, records: List[Dict[str, Any]], week_label: str = "") -> int:
+        """直接存各仓预约(不走 AI)。records=[{wh,delay_days,status}]。"""
+        self.db.query(WxWarehouseBooking).filter(
+            WxWarehouseBooking.corp_id == corp_id
+        ).delete()
+        n = 0
+        for r in records:
+            wh = (r.get("wh") or "").strip().upper()
+            if not wh:
+                continue
+            self.db.add(WxWarehouseBooking(
+                corp_id=corp_id, warehouse_code=wh,
+                delay_days=int(r.get("delay_days", 0) or 0),
+                status=(r.get("status") or "")[:32],
+                week_label=week_label or datetime.now().strftime("%Y.%m.%d"),
+            ))
+            n += 1
+        self.db.commit()
+        return n
+
     def list_all(self, corp_id: str) -> List[Dict[str, Any]]:
         rows = self.db.query(WxWarehouseBooking).filter(
             WxWarehouseBooking.corp_id == corp_id

@@ -238,6 +238,21 @@ class WxWarehouseBooking(Base):
     updated_at = Column(DateTime, default=datetime.now)
 
 
+class WxShipmentDW(Base):
+    """每票货的预计 DW(入仓日)核准记录"""
+    __tablename__ = "wx_shipment_dw"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    corp_id = Column(String(64), index=True, nullable=False)
+    shipment_id = Column(String(64), index=True, nullable=False)
+    warehouse = Column(String(32), default="")
+    service_name = Column(String(64), default="")
+    eta_dw = Column(String(20), default="", comment="预计DW日期 YYYY-MM-DD")
+    delay_days = Column(Integer, default=0, comment="该仓预约推迟天数")
+    status = Column(String(16), default="pending", comment="pending/approved")
+    updated_at = Column(DateTime, default=datetime.now)
+
+
 class WxGroupCustomer(Base):
     """群 ↔ 新智慧客户 映射（豆包/规则识别群名得到的客户，用于查件）"""
     __tablename__ = "wx_group_customer"

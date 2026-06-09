@@ -116,7 +116,9 @@ def business_job():
         asyncio.run(CustomerBusinessService(db).ranking(corp, days=60, use_cache=False))
         from app.services.fulfillment_service import FulfillmentService
         asyncio.run(FulfillmentService(db).forecast(corp, use_cache=False))
-        print("[business] 客户业务量 + 履约预测缓存已更新")
+        from app.services.dw_service import DWService
+        asyncio.run(DWService(db).board(corp, use_cache=False))
+        print("[business] 客户业务量 + 履约 + DW看板缓存已更新")
     except Exception as e:
         print(f"[business] 失败: {e}")
     finally:

@@ -176,3 +176,33 @@ async def warehouse_list(
     cid = _corp_id(current_user)
     from app.services.warehouse_booking_service import WarehouseBookingService
     return WarehouseBookingService(db).list_all(cid)
+
+
+@router.get("/dw/board", summary="DW核准看板(转运中按目的仓分组+预填DW)")
+async def dw_board(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.dw_service import DWService
+    return await DWService(db).board(cid)
+
+
+class DWApproveReq(BaseModel):
+    shipment_id: str
+    eta_dw: str
+    warehouse: str = ""
+    service_name: str = ""
+    delay_days: int = 0
+
+
+@router.post("/dw/approve", summary="核准某票DW并写入")
+async def dw_approve(
+    req: DWApproveReq,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.dw_service import DWService
+    return DWService(db).approve(cid, req.shipment_id, req.eta_dw,
+                                 req.warehouse, req.service_name, req.delay_days)
