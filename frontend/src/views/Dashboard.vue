@@ -24,17 +24,37 @@
     <el-row :gutter="16" style="margin-top:16px">
       <!-- 今日必须处理 -->
       <el-col :span="14">
-        <div class="panel">
+        <!-- 两大板块 -->
+        <div class="two-block">
+          <div class="blk todo" :class="{ active: actions.length }">
+            <div class="blk-n">{{ actions.length }}</div>
+            <div class="blk-l">🔴 待处理</div>
+          </div>
+          <div class="blk ok">
+            <div class="blk-n">{{ overview.today_messages ?? 0 }}</div>
+            <div class="blk-l">🟢 今日消息正常流入 · 其余运转正常</div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
           <div class="panel-head">
-            <span>今日必须处理 <el-tag size="small" type="danger" round>{{ actions.length }}</el-tag></span>
+            <span>待处理事项</span>
             <el-link type="primary" :underline="false" @click="$router.push('/staff')">查看客服效能 →</el-link>
           </div>
-          <div v-if="!actions.length" class="empty">🎉 今日暂无待处理事项</div>
-          <div v-for="(a, i) in actions" :key="i" class="action-item" @click="goGroup(a.chat_id)">
-            <span class="dot" :class="a.level"></span>
-            <el-tag size="small" effect="plain" class="action-type">{{ a.type }}</el-tag>
-            <span class="action-text">{{ a.text }}</span>
-          </div>
+          <div v-if="!actions.length" class="empty">🎉 今日一切正常，无待处理事项</div>
+          <template v-else>
+            <!-- 大致说明：按类型汇总，不用一个个点 -->
+            <div class="cat-row">
+              <span v-for="c in actionSummary" :key="c.type" class="cat" :class="c.level">
+                {{ c.type }} <b>{{ c.count }}</b>
+              </span>
+            </div>
+            <div v-for="(a, i) in actions" :key="i" class="action-item" @click="goGroup(a.chat_id)">
+              <span class="dot" :class="a.level"></span>
+              <el-tag size="small" effect="plain" class="action-type">{{ a.type }}</el-tag>
+              <span class="action-text">{{ a.text }}</span>
+            </div>
+          </template>
         </div>
 
         <!-- AI 今日群情报 -->
@@ -106,6 +126,18 @@ const aiBrief = computed(() => {
 
 const goGroup = (chatId: string) => { if (chatId) router.push(`/groups/${chatId}`) }
 
+// 按类型汇总待处理事项(大致说明,不用逐条点)
+const actionSummary = computed(() => {
+  const m: Record<string, { count: number; level: string }> = {}
+  for (const a of actions.value) {
+    if (!m[a.type]) m[a.type] = { count: 0, level: a.level }
+    m[a.type].count++
+  }
+  return Object.entries(m)
+    .map(([type, v]) => ({ type, count: v.count, level: v.level }))
+    .sort((a, b) => b.count - a.count)
+})
+
 onMounted(async () => {
   const [ov, ta, rank, sov, h] = await Promise.all([
     groupApi.overview(), dashboardApi.todayActions(), staffApi.ranking(), staffApi.overview(),
@@ -143,6 +175,19 @@ onMounted(async () => {
 .stat-value { font-size: 24px; font-weight: 700; line-height: 1.1; }
 .stat-label { font-size: 12px; color: #909399; margin-top: 4px; }
 
+.two-block { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.blk { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.blk-n { font-size: 32px; font-weight: 700; line-height: 1; }
+.blk-l { font-size: 13px; color: #909399; margin-top: 8px; }
+.blk.todo .blk-n { color: #C0C4CC; }
+.blk.todo.active .blk-n { color: #F56C6C; }
+.blk.ok .blk-n { color: #67C23A; }
+.cat-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #ebeef5; }
+.cat { font-size: 13px; padding: 4px 12px; border-radius: 14px; background: #f4f4f5; color: #606266; }
+.cat b { margin-left: 4px; font-size: 14px; }
+.cat.high { background: #fef0f0; color: #F56C6C; }
+.cat.medium { background: #fdf6ec; color: #E6A23C; }
+.cat.low { background: #f0f9eb; color: #67C23A; }
 .panel { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;
