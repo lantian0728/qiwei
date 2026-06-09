@@ -22,12 +22,11 @@ class DWService:
         self.db = db
 
     async def board(self, corp_id: str, use_cache: bool = True,
-                    max_pages: int = 40, page_size: int = 50) -> Dict[str, Any]:
+                    max_pages: int = 30, page_size: int = 50) -> Dict[str, Any]:
         c = DWService._cache.get(corp_id)
         if use_cache and c and (datetime.now() - c["ts"]).total_seconds() < 7200:
             return c["data"]
-        if use_cache:
-            return {"available": True, "computing": True, "warehouses": [], "total": 0}
+        # 缓存空：直接现算(前端有进度遮罩等待，避免一直 computing 转圈)
         if not nextsls.is_available():
             return {"available": False, "warehouses": [], "total": 0}
 
