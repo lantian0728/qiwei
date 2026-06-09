@@ -140,3 +140,13 @@ async def customer_business(
     cid = _corp_id(current_user)
     from app.services.customer_business_service import CustomerBusinessService
     return await CustomerBusinessService(db).ranking(cid, days=days)
+
+
+@router.get("/fulfillment", summary="FBA头程履约预测(预计入仓日+进度健康)")
+async def fulfillment(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cid = _corp_id(current_user)
+    from app.services.fulfillment_service import FulfillmentService
+    return await FulfillmentService(db).forecast(cid)
