@@ -1,5 +1,11 @@
 <template>
   <div class="group-list">
+    <div class="ov-cards">
+      <div class="ov-card"><b>{{ clientStat.total ?? total }}</b><span>监测群</span></div>
+      <div class="ov-card"><b class="agent">{{ clientStat.agent ?? 0 }}</b><span>代理群</span></div>
+      <div class="ov-card"><b class="direct">{{ clientStat.direct ?? 0 }}</b><span>直客群</span></div>
+      <div class="ov-card"><b class="unknown">{{ clientStat.unknown ?? 0 }}</b><span>未判定</span></div>
+    </div>
     <el-card shadow="never">
       <!-- 筛选栏 -->
       <div class="filters">
@@ -27,12 +33,6 @@
         </el-button>
       </div>
 
-      <div class="client-stat">
-        <span class="cs agent">代理群 <b>{{ clientStat.agent ?? 0 }}</b></span>
-        <span class="cs direct">直客群 <b>{{ clientStat.direct ?? 0 }}</b></span>
-        <span class="cs unknown">未判定 <b>{{ clientStat.unknown ?? 0 }}</b></span>
-      </div>
-
       <el-table :data="list" v-loading="loading" style="margin-top:16px" @row-click="goDetail">
         <el-table-column prop="group_name" label="群名称" min-width="200" show-overflow-tooltip />
         <el-table-column prop="group_type_name" label="类型" width="80" />
@@ -55,19 +55,16 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="owner_name" label="群主" width="100" />
-        <el-table-column prop="member_count" label="成员数" width="80" align="center" />
-        <el-table-column label="活跃度" width="120">
+        <el-table-column prop="owner_name" label="群主" width="100" show-overflow-tooltip />
+        <el-table-column prop="member_count" label="成员" width="70" align="center" />
+        <el-table-column label="活跃度" width="100">
           <template #default="{ row }">
             <el-tag :color="row.activity_level_color" effect="dark" style="border:none">
               {{ row.activity_level_name }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="activity_score" label="评分" width="90" align="center">
-          <template #default="{ row }">{{ row.activity_score }}</template>
-        </el-table-column>
-        <el-table-column label="重点" width="70" align="center">
+        <el-table-column label="重点" width="60" align="center">
           <template #default="{ row }">
             <el-icon v-if="row.is_key_group" color="#E6A23C"><StarFilled /></el-icon>
           </template>
@@ -164,11 +161,12 @@ onMounted(() => { load(); loadStat() })
 
 <style scoped>
 .filters { display: flex; gap: 12px; flex-wrap: wrap; }
-.client-stat { display: flex; gap: 24px; margin-top: 14px; padding: 10px 14px; background: #f5f7fa; border-radius: 8px; }
-.cs { font-size: 14px; color: #606266; }
-.cs b { font-size: 18px; margin-left: 4px; }
-.cs.agent b { color: #E6A23C; }
-.cs.direct b { color: #67C23A; }
-.cs.unknown b { color: #909399; }
+.ov-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+.ov-card { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.ov-card b { font-size: 28px; font-weight: 700; color: #303133; }
+.ov-card b.agent { color: #E6A23C; }
+.ov-card b.direct { color: #67C23A; }
+.ov-card b.unknown { color: #909399; }
+.ov-card span { display: block; font-size: 13px; color: #909399; margin-top: 6px; }
 :deep(.el-table__row) { cursor: pointer; }
 </style>
