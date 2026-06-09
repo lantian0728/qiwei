@@ -61,9 +61,13 @@ const load = async () => {
   const t = startTask('📊 正在汇总客户业务量')
   try {
     const r: any = await trackingApi.customerBusiness(days.value)
+    if (r.computing) {
+      ElMessage.info('首次汇总中（拉取 TMS 运单），约 1 分钟后自动刷新…')
+      setTimeout(load, 30000)
+      return
+    }
     customers.value = r.customers || []
     dropping.value = r.dropping || []
-    ElMessage.success(`已加载 ${customers.value.length} 个客户`)
   } catch (e: any) {
     ElMessage.error('加载失败：' + (e?.response?.data?.detail || e?.message || '稍后重试'))
   } finally {

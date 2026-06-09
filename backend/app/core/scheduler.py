@@ -103,6 +103,24 @@ def cargo_watch_job():
         db.close()
 
 
+def business_job():
+    """客户业务量预算缓存(拉 TMS 较慢,后台算好,前端秒读不超时)。"""
+    from app.core import nextsls
+    if not nextsls.is_available():
+        return
+    from app.services.customer_business_service import CustomerBusinessService
+    corp = settings.WX_CORP_ID or settings.WX_ARCHIVE_CORPID
+    db = SessionLocal()
+    try:
+        asyncio.run(CustomerBusinessService(db).ranking(corp, days=30, use_cache=False))
+        asyncio.run(CustomerBusinessService(db).ranking(corp, days=60, use_cache=False))
+        print("[business] 客户业务量缓存已更新")
+    except Exception as e:
+        print(f"[business] 失败: {e}")
+    finally:
+        db.close()
+
+
 def tracking_watch_job():
     """轨迹变化巡检 + 群机器人推送。"""
     from app.services.push_service import run_tracking_push
@@ -136,6 +154,12 @@ def start_scheduler():
     scheduler.add_job(cargo_watch_job, "date",
                       run_date=datetime.now() + timedelta(seconds=120),
                       id="cargo_watch_startup", replace_existing=True)
+    # 客户业务量预算缓存：每 2 小时 + 启动后 90 秒
+    scheduler.add_job(business_job, "interval", minutes=120,
+                      id="business", replace_existing=True)
+    scheduler.add_job(business_job, "date",
+                      run_date=datetime.now() + timedelta(seconds=90),
+                      id="business_startup", replace_existing=True)
     # 启动后：先同步消息(60s)，再跑 AI 日报(200s)
     scheduler.add_job(archive_sync_job, "date",
                       run_date=datetime.now() + timedelta(seconds=60),

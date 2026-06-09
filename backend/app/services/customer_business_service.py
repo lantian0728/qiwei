@@ -21,13 +21,22 @@ def _pct(cur: float, prev: float) -> float:
 
 
 class CustomerBusinessService:
+    _cache: Dict[Any, Dict[str, Any]] = {}  # (corp_id,days) -> {data, ts}
+
     def __init__(self, db: Session):
         self.db = db
 
-    async def ranking(self, corp_id: str, days: int = 30,
-                      max_pages: int = 40, page_size: int = 50) -> Dict[str, Any]:
+    async def ranking(self, corp_id: str, days: int = 30, max_pages: int = 40,
+                      page_size: int = 50, use_cache: bool = True) -> Dict[str, Any]:
+        key = (corp_id, days)
+        cached = CustomerBusinessService._cache.get(key)
+        if cached and (datetime.now() - cached["ts"]).total_seconds() < 7200:
+            return cached["data"]
+        if use_cache:
+            # 只读请求且无缓存：不现拉(避免超时)，返回 computing，由后台 job 算好
+            return {"available": True, "computing": True, "customers": [], "dropping": []}
         if not nextsls.is_available():
-            return {"available": False, "customers": []}
+            return {"available": False, "customers": [], "dropping": []}
         client = NextSLSClient()
         now = datetime.now()
         cur_start = now - timedelta(days=days)
@@ -76,9 +85,10 @@ class CustomerBusinessService:
                 "dropping": prev[0] >= 4 and cur[0] < prev[0] * 0.5,  # 上期≥4单且本期跌一半
             })
         customers.sort(key=lambda x: (-x["cur_orders"], -x["cur_amount"]))
-        return {
-            "available": True,
-            "days": days,
+        data = {
+            "available": True, "days": days, "computing": False,
             "customers": customers,
             "dropping": [c for c in customers if c["dropping"]],
         }
+        CustomerBusinessService._cache[key] = {"data": data, "ts": datetime.now()}
+        return data
