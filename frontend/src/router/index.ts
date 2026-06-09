@@ -16,6 +16,7 @@ const routes = [
       { path: 'groups', name: 'groups', component: () => import('@/views/GroupList.vue'), meta: { title: '客户与群' } },
       { path: 'customer-business', name: 'customer-business', component: () => import('@/views/CustomerBusiness.vue'), meta: { title: '客户业务' } },
       { path: 'warehouse-dw', name: 'warehouse-dw', component: () => import('@/views/WarehouseDW.vue'), meta: { title: '仓库预约/DW' } },
+      { path: 'dw-board', name: 'dw-board', component: () => import('@/views/DWBoard.vue'), meta: { title: 'DW核准' } },
       { path: 'groups/:chatId', name: 'group-detail', component: () => import('@/views/GroupDetail.vue'), meta: { title: '群详情' } },
       { path: 'alerts', name: 'alerts', component: () => import('@/views/Alerts.vue'), meta: { title: '预警管理' } },
       { path: 'admin', name: 'admin', component: () => import('@/views/Admin.vue'), meta: { title: 'API配置后台' } },

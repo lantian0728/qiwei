@@ -80,6 +80,8 @@ export const trackingApi = {
   warehouseUpdate: (text: string, week_label = '') =>
     request.post('/tracking/warehouse/update', { text, week_label }, { timeout: 120000 }),
   warehouseList: () => request.get('/tracking/warehouse/list'),
+  dwBoard: () => request.get('/tracking/dw/board', { timeout: 120000 }),
+  dwApprove: (p: any) => request.post('/tracking/dw/approve', p),
   matchRun: () => request.post('/tracking/match/run', {}, { timeout: 180000 }),
   matchList: () => request.get('/tracking/match/list'),
   matchSet: (data: any) => request.post('/tracking/match/set', data),
