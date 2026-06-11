@@ -134,6 +134,7 @@ async def get_users(db: Session = Depends(get_db),
         {
             "userid": u.userid, "username": u.username, "real_name": u.real_name,
             "department": u.department, "role": u.role,
+            "is_active": bool(u.is_active),
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
         }
         for u in users
@@ -154,6 +155,25 @@ async def update_user_role(req: UpdateRoleRequest, db: Session = Depends(get_db)
     user.role = req.role
     db.commit()
     return {"success": True, "message": "角色已更新"}
+
+
+class SetActiveRequest(BaseModel):
+    userid: str
+    is_active: bool
+
+
+@router.post("/users/active", summary="授权/停用用户登录(审核制)")
+async def set_user_active(req: SetActiveRequest, db: Session = Depends(get_db),
+                          current_user: dict = Depends(get_current_user)):
+    cid = _corp_id(current_user)
+    user = db.query(SysUser).filter(
+        SysUser.corp_id == cid, SysUser.userid == req.userid
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    user.is_active = req.is_active
+    db.commit()
+    return {"success": True, "message": "已授权登录" if req.is_active else "已停用登录"}
 
 
 # ========== 同步日志 ==========

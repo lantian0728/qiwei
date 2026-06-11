@@ -85,6 +85,14 @@
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="登录授权" width="170">
+              <template #default="{ row }">
+                <el-tag v-if="row.is_active" type="success" size="small">已授权</el-tag>
+                <el-tag v-else type="warning" size="small">待授权</el-tag>
+                <el-button v-if="!row.is_active" size="small" type="primary" link @click="setActive(row, true)">批准</el-button>
+                <el-button v-else size="small" type="danger" link @click="setActive(row, false)">停用</el-button>
+              </template>
+            </el-table-column>
             <el-table-column label="最后登录" width="160">
               <template #default="{ row }">
                 {{ row.last_login_at ? dayjs(row.last_login_at).format('YYYY-MM-DD HH:mm') : '-' }}
@@ -208,6 +216,12 @@ const loadUsers = async () => {
 const updateRole = async (user: any) => {
   await adminApi.updateUserRole({ userid: user.userid, role: user.role })
   ElMessage.success('角色已更新')
+}
+
+const setActive = async (user: any, active: boolean) => {
+  await adminApi.setUserActive(user.userid, active)
+  user.is_active = active
+  ElMessage.success(active ? '已授权登录' : '已停用登录')
 }
 
 const loadLogs = async () => {

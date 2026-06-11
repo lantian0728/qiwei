@@ -79,6 +79,11 @@ async def login_with_wxwork(req: LoginRequest, db: Session = Depends(get_db)):
                                username=userid, role=ROLE_OPERATOR)
                 db.add(user)
 
+        # 审核制：新人/未授权先记录再拒绝，待管理员在后台批准
+        if not user.is_active:
+            db.commit()
+            raise HTTPException(status_code=403,
+                                detail="账号已提交，待管理员在后台授权后即可登录")
         user.last_login_at = datetime.now()
         db.commit()
         db.refresh(user)
@@ -147,6 +152,8 @@ async def login_password(req: PasswordLoginRequest, db: Session = Depends(get_db
     ).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="账号或密码错误")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="账号待管理员授权")
     user.last_login_at = datetime.now()
     db.commit()
     token = create_access_token({

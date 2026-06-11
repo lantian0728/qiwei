@@ -28,6 +28,7 @@ class SysUser(Base):
     department = Column(String(128), default="")
     role = Column(Integer, default=3, comment="1超管 2管理员 3运营")
     password_hash = Column(String(128), default="", comment="账号密码登录用(sha256)")
+    is_active = Column(Boolean, default=False, comment="是否已授权登录(审核制),默认待授权")
     last_login_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 

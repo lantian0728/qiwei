@@ -42,6 +42,8 @@ export const adminApi = {
   saveSystemConfig: (configs: any) => request.post('/admin/system-config', configs),
   getUsers: () => request.get('/admin/users'),
   updateUserRole: (data: any) => request.post('/admin/users/role', data),
+  setUserActive: (userid: string, is_active: boolean) =>
+    request.post('/admin/users/active', { userid, is_active }),
   getSyncLogs: (params: any) => request.get('/admin/sync-logs', { params }),
 }
 
