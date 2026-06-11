@@ -43,7 +43,7 @@ async def login_with_wxwork(req: LoginRequest, db: Session = Depends(get_db)):
         WxCorpConfig.is_active == True,
     ).first()
 
-    corp_secret = config.corp_secret if config else settings.WX_CORP_SECRET
+    corp_secret = settings.WX_LOGIN_SECRET or (config.corp_secret if config else None) or settings.WX_CORP_SECRET
     if not corp_secret:
         raise HTTPException(status_code=400, detail="企业配置不存在，请先完成API配置")
 
@@ -168,7 +168,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 @router.get("/wxwork/scan-config", summary="企业微信扫码登录配置(corpid+agentid,不含secret)")
 async def wxwork_scan_config():
     return {
-        "enabled": bool(settings.WX_CORP_ID and settings.WX_AGENT_ID and settings.WX_CORP_SECRET),
+        "enabled": bool(settings.WX_CORP_ID and settings.WX_AGENT_ID and (settings.WX_LOGIN_SECRET or settings.WX_CORP_SECRET)),
         "corp_id": settings.WX_CORP_ID,
         "agent_id": settings.WX_AGENT_ID,
     }

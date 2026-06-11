@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     WX_CORP_ID: str = ""
     WX_AGENT_ID: str = ""
     WX_CORP_SECRET: str = ""   # 自建应用Secret(含客户联系权限),配置后自动接入真实企业
+    WX_LOGIN_SECRET: str = ""  # 扫码登录应用(WX_AGENT_ID对应)的Secret;留空则用WX_CORP_SECRET
 
     # CORS（逗号分隔）
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
