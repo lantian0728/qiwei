@@ -29,7 +29,12 @@ onMounted(async () => {
     const res: any = await authApi.loginWxWork(code, corpId)
     authStore.setAuth(res.access_token, res.user_info)
     ElMessage.success('登录成功')
-    router.replace('/dashboard')
+    // 二维码是 iframe 嵌入的，回调可能跑在 iframe 内 → 用顶层窗口整页跳转
+    if (window.top && window.top !== window.self) {
+      window.top.location.href = '/dashboard'
+    } else {
+      router.replace('/dashboard')
+    }
   } catch (e: any) {
     msg.value = e?.response?.data?.detail || '登录失败，返回登录页…'
     setTimeout(() => router.replace('/login'), 2000)

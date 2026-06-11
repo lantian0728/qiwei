@@ -153,35 +153,16 @@ const getOAuthUrl = async () => {
   }
 }
 
-function loadWwLogin(): Promise<void> {
-  return new Promise((resolve) => {
-    if ((window as any).WwLogin) return resolve()
-    const s = document.createElement('script')
-    s.src = 'https://wwcdn.weixin.qq.com/node/wework/wwopen/js/wwLogin-1.2.7.js'
-    s.onload = () => resolve()
-    s.onerror = () => resolve()
-    document.head.appendChild(s)
-  })
-}
-
 const renderQr = async () => {
   try {
     const cfg: any = await authApi.scanConfig()
     if (!cfg.enabled) { activeTab.value = 'password'; return }
-    await loadWwLogin()
-    const W = (window as any).WwLogin
-    if (!W) { activeTab.value = 'password'; return }
+    const redirect = encodeURIComponent(window.location.origin + '/auth/callback')
+    const url = `https://login.work.weixin.qq.com/wwlogin/sso/login?login_type=CorpApp&appid=${cfg.corp_id}&agentid=${cfg.agent_id}&redirect_uri=${redirect}&state=wxlogin`
     const box = document.getElementById('ww_qr')
-    if (box) box.innerHTML = ''
-    W({
-      id: 'ww_qr',
-      appid: cfg.corp_id,
-      agentid: String(cfg.agent_id),
-      redirect_uri: encodeURIComponent(window.location.origin + '/auth/callback'),
-      state: 'wxlogin',
-      href: '',
-      lang: 'zh',
-    })
+    if (box) {
+      box.innerHTML = `<iframe src="${url}" style="width:300px;height:400px;border:none" scrolling="no"></iframe>`
+    }
   } catch (e) {
     activeTab.value = 'password'
   }
