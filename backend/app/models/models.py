@@ -27,6 +27,7 @@ class SysUser(Base):
     mobile = Column(String(32), default="")
     department = Column(String(128), default="")
     role = Column(Integer, default=3, comment="1超管 2管理员 3运营")
+    password_hash = Column(String(128), default="", comment="账号密码登录用(sha256)")
     last_login_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 

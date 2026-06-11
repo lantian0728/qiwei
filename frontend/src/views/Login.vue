@@ -17,6 +17,26 @@
 
       <div class="login-card">
         <el-tabs v-model="activeTab" class="login-tabs">
+          <el-tab-pane label="账号登录" name="password">
+            <div class="pwd-login">
+              <el-form :model="pwdForm">
+                <el-form-item>
+                  <el-input v-model="pwdForm.username" placeholder="账号" size="large">
+                    <template #prefix><el-icon><User /></el-icon></template>
+                  </el-input>
+                </el-form-item>
+                <el-form-item>
+                  <el-input v-model="pwdForm.password" type="password" show-password placeholder="密码"
+                            size="large" @keyup.enter="handlePwdLogin">
+                    <template #prefix><el-icon><Lock /></el-icon></template>
+                  </el-input>
+                </el-form-item>
+              </el-form>
+              <el-button type="primary" size="large" style="width:100%;margin-top:8px"
+                         :loading="loading" @click="handlePwdLogin">登 录</el-button>
+            </div>
+          </el-tab-pane>
+
           <el-tab-pane label="企业微信授权登录" name="wxwork">
             <div class="wxwork-login">
               <div class="wxwork-icon">
@@ -46,18 +66,6 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="演示登录" name="demo">
-            <div class="demo-login">
-              <div class="demo-icon">
-                <el-icon size="60" color="#409EFF"><View /></el-icon>
-              </div>
-              <p class="demo-desc">无需企业微信凭证，直接进入查看界面与模拟数据</p>
-              <el-button type="primary" size="large" style="width:100%;margin-top:16px"
-                         :loading="loading" @click="handleDemoLogin">
-                进入演示
-              </el-button>
-            </div>
-          </el-tab-pane>
         </el-tabs>
       </div>
 
@@ -75,9 +83,27 @@ import { authApi } from '@/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const activeTab = ref('wxwork')
+const activeTab = ref('password')
 const loading = ref(false)
 const wxForm = ref({ corpId: '', code: '' })
+const pwdForm = ref({ username: '', password: '' })
+
+const handlePwdLogin = async () => {
+  if (!pwdForm.value.username || !pwdForm.value.password) {
+    ElMessage.warning('请输入账号和密码'); return
+  }
+  loading.value = true
+  try {
+    const res: any = await authApi.loginPassword(pwdForm.value.username, pwdForm.value.password)
+    authStore.setAuth(res.access_token, res.user_info)
+    ElMessage.success('登录成功')
+    router.push('/dashboard')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '账号或密码错误')
+  } finally {
+    loading.value = false
+  }
+}
 
 const handleWxLogin = async () => {
   if (!wxForm.value.code) {

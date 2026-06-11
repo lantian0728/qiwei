@@ -24,6 +24,15 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
 
+def hash_password(pwd: str) -> str:
+    import hashlib
+    return hashlib.sha256((pwd + settings.SECRET_KEY).encode("utf-8")).hexdigest()
+
+
+def verify_password(pwd: str, hashed: str) -> bool:
+    return bool(hashed) and hash_password(pwd) == hashed
+
+
 def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
     """从 JWT 解析当前用户信息，返回 token 里的 payload。"""
     credentials_exc = HTTPException(

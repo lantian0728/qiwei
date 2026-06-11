@@ -5,6 +5,8 @@ export const authApi = {
   loginWxWork: (code: string, corp_id?: string) =>
     request.post('/auth/login/wxwork', { code, corp_id }),
   loginDemo: () => request.post('/auth/login/demo'),
+  loginPassword: (username: string, password: string) =>
+    request.post('/auth/login/password', { username, password }),
   getMe: () => request.get('/auth/me'),
   getOAuthUrl: (redirect_uri: string, corp_id?: string) =>
     request.get('/auth/wxwork/oauth_url', { params: { redirect_uri, corp_id } }),
