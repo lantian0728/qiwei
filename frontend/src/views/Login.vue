@@ -17,6 +17,12 @@
 
       <div class="login-card">
         <el-tabs v-model="activeTab" class="login-tabs">
+          <el-tab-pane label="企业微信扫码" name="scan">
+            <div class="wxwork-login">
+              <div id="ww_qr" style="display:flex;justify-content:center;min-height:240px"></div>
+              <p class="wxwork-desc">打开企业微信 App 扫一扫登录</p>
+            </div>
+          </el-tab-pane>
           <el-tab-pane label="账号登录" name="password">
             <div class="pwd-login">
               <el-form :model="pwdForm">
@@ -75,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -83,7 +89,7 @@ import { authApi } from '@/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const activeTab = ref('password')
+const activeTab = ref('scan')
 const loading = ref(false)
 const wxForm = ref({ corpId: '', code: '' })
 const pwdForm = ref({ username: '', password: '' })
@@ -146,6 +152,42 @@ const getOAuthUrl = async () => {
     ElMessage.error('获取授权链接失败')
   }
 }
+
+function loadWwLogin(): Promise<void> {
+  return new Promise((resolve) => {
+    if ((window as any).WwLogin) return resolve()
+    const s = document.createElement('script')
+    s.src = 'https://wwcdn.weixin.qq.com/node/wework/wwopen/js/wwLogin-1.2.7.js'
+    s.onload = () => resolve()
+    s.onerror = () => resolve()
+    document.head.appendChild(s)
+  })
+}
+
+const renderQr = async () => {
+  try {
+    const cfg: any = await authApi.scanConfig()
+    if (!cfg.enabled) { activeTab.value = 'password'; return }
+    await loadWwLogin()
+    const W = (window as any).WwLogin
+    if (!W) { activeTab.value = 'password'; return }
+    const box = document.getElementById('ww_qr')
+    if (box) box.innerHTML = ''
+    W({
+      id: 'ww_qr',
+      appid: cfg.corp_id,
+      agentid: String(cfg.agent_id),
+      redirect_uri: encodeURIComponent(window.location.origin + '/auth/callback'),
+      state: 'wxlogin',
+      href: '',
+      lang: 'zh',
+    })
+  } catch (e) {
+    activeTab.value = 'password'
+  }
+}
+
+onMounted(() => { renderQr() })
 </script>
 
 <style scoped>

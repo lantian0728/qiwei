@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   { path: '/login', name: 'login', component: () => import('@/views/Login.vue') },
+  { path: '/auth/callback', name: 'auth-callback', component: () => import('@/views/AuthCallback.vue') },
   {
     path: '/',
     component: () => import('@/layout/MainLayout.vue'),
@@ -32,7 +33,8 @@ const router = createRouter({
 // 全局登录守卫
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('access_token')
-  if (to.path !== '/login' && !token) {
+  const publicPages = ['/login', '/auth/callback']
+  if (!publicPages.includes(to.path) && !token) {
     next('/login')
   } else if (to.path === '/login' && token) {
     next('/dashboard')
