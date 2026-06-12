@@ -111,7 +111,7 @@ class GroupClassifyService:
             WxGroup.corp_id == corp_id, WxGroup.chat_id == chat_id
         ).first()
         if g:
-            g.client_kind = kind if kind in ("agent", "direct", "unknown") else "unknown"
+            g.client_kind = kind if kind in ("agent", "direct", "peer", "unknown") else "unknown"
             g.client_kind_conf = 100
             self.db.commit()
         return self.summary(corp_id)
@@ -124,6 +124,7 @@ class GroupClassifyService:
         return {
             "agent": m.get("agent", 0),
             "direct": m.get("direct", 0),
+            "peer": m.get("peer", 0),
             "unknown": m.get("unknown", 0),
             "total": sum(m.values()),
             "ai_available": doubao.is_available(),

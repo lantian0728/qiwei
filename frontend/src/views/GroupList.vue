@@ -40,15 +40,16 @@
           <template #default="{ row }">
             <span @click.stop>
               <el-dropdown trigger="click" @command="(k:string)=>setKind(row, k)">
-                <el-tag :type="row.client_kind==='agent'?'warning':row.client_kind==='direct'?'success':'info'"
+                <el-tag :type="row.client_kind==='agent'?'warning':row.client_kind==='direct'?'success':row.client_kind==='peer'?'danger':'info'"
                         size="small" :effect="row.client_kind_conf===100?'dark':'light'" style="cursor:pointer">
-                  {{ row.client_kind==='agent'?'代理':row.client_kind==='direct'?'直客':'未判定' }}
+                  {{ row.client_kind==='agent'?'代理':row.client_kind==='direct'?'直客':row.client_kind==='peer'?'同行':'未判定' }}
                   {{ row.client_kind_conf===100 ? ' ✓' : '' }}
                 </el-tag>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="agent">代理</el-dropdown-item>
                     <el-dropdown-item command="direct">直客</el-dropdown-item>
+                    <el-dropdown-item command="peer">同行</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -131,7 +132,7 @@ const setKind = async (row: any, kind: string) => {
     row.client_kind = kind
     row.client_kind_conf = 100
     clientStat.value = r
-    ElMessage.success('已设为' + (kind === 'agent' ? '代理' : '直客') + '（已锁定，AI 不再改）')
+    ElMessage.success('已设为' + (kind === 'agent' ? '代理' : kind === 'direct' ? '直客' : '同行') + '（已锁定，AI 不再改）')
   } catch {
     ElMessage.error('设置失败')
   }

@@ -32,6 +32,22 @@ def _is_perfunctory(text: str) -> bool:
     t = re.sub(r"[\s,，。.!！~、:：\[\]]+", "", (text or "")).lower()
     return (not t) or t in PERFUNCTORY_WORDS or len(t) <= 2
 
+# 客户结束语：客户最后一句是这些=对话已闭环(收到/好的/谢谢类)，不需客服再回，不算"未回复"
+# 注意：不含"在/稍等/马上/看下"等召唤或客服侧用语
+CLOSING_WORDS = {
+    "收到", "收到了", "收到收到", "好", "好的", "好的好的", "好哒", "好滴", "嗯", "嗯嗯",
+    "嗯好的", "嗯好", "ok", "okok", "okk", "好的谢谢", "收到谢谢", "好的谢谢了", "好嘞",
+    "谢谢", "谢谢了", "谢谢您", "谢谢你", "谢谢啦", "多谢", "感谢", "感谢了", "3q", "thx", "thanks",
+    "辛苦了", "辛苦", "辛苦啦", "麻烦了", "麻烦你了", "麻烦您了", "行", "可以", "可以的",
+    "没问题", "知道了", "明白", "明白了", "了解", "了解了", "👌", "🙏",
+}
+
+
+def _is_closing(text: str) -> bool:
+    """客户最后一句是否结束语——是则对话闭环，不算客服未回复。"""
+    t = re.sub(r"[\s,，。.!！~、:：\[\]]+", "", (text or "")).lower()
+    return bool(t) and t in CLOSING_WORDS
+
 # 客服名单：默认放已知客服，可在配置里用 staff_names 覆盖（逗号分隔姓名）
 STAFF_NAMES_KEY = "staff_names"
 DEFAULT_STAFF_NAMES = ("陈小娴", "江燕芳", "郑燕芳", "陈桂兰")
@@ -131,7 +147,9 @@ class StaffPerformanceService:
                 flush_unanswered(m.chat_id)
 
             if m.sender_type == 2:  # 客户
-                if pending is None:
+                if _is_closing(m.content):
+                    pending = None  # 客户结束语(收到/好的/谢谢)→对话闭环，不算未回复
+                elif pending is None:
                     pending = m.send_time
             elif m.sender_name in staff:  # 只有客服名单内的人，才算"客服回复"
                 if pending is not None:
