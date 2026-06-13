@@ -31,10 +31,11 @@
                               size="small" style="width:140px" :clearable="false" />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="90" align="center">
+          <el-table-column label="操作" width="190" align="center">
             <template #default="{ row }">
               <el-tag v-if="row.status==='approved'" type="success" size="small">已核准</el-tag>
               <el-button v-else size="small" type="primary" @click="approveOne(w, row)">确认</el-button>
+              <el-button size="small" type="success" plain @click="copyPhrase(w, row)" style="margin-left:6px">复制话术</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -104,6 +105,29 @@ const approveWh = async (w: any) => {
     ElMessage.success(`${w.warehouse} 本仓已全部核准`)
   } finally {
     t.close()
+  }
+}
+
+const genPhrase = (w: any, row: any): string => {
+  const eta = row.eta_dw || ''
+  const p = eta.split('-')
+  const etaCn = p.length === 3 ? `${+p[1]}月${+p[2]}日` : eta
+  const extra = (w.delay_days && w.delay_days < 99)
+    ? '(该仓近期预约较紧，实际入仓时间以仓库安排为准)' : ''
+  return `您好，您的货件 ${row.shipment_id} 预计 ${etaCn} 入仓 ${w.warehouse}${extra}。如有疑问随时联系~`
+}
+
+const copyPhrase = async (w: any, row: any) => {
+  const text = genPhrase(w, row)
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('话术已复制，可直接粘贴到客户群')
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
+    ElMessage.success('话术已复制')
   }
 }
 
